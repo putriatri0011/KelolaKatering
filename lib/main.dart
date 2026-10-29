@@ -4,6 +4,7 @@ import 'models/pesanan_model.dart';
 import 'screens/daftar_pesanan_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/detail_pesanan_screen.dart';
+import 'screens/tambah_pesanan_screen.dart';
 import 'utils/theme.dart';
 
 void main() {
@@ -60,6 +61,33 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
+  /// Membuka Form Tambah Pesanan, lalu menggambar ulang halaman
+  /// ketika pengguna berhasil menyimpan pesanan baru.
+  ///
+  /// Form mengembalikan `true` melalui [Navigator.pop] bila data valid
+  /// dan sudah ditambahkan ke `MockData.pesananList`. Pemanggilan
+  /// [setState] membuat Dashboard (ringkasan & pesanan terbaru) dan
+  /// Daftar Pesanan menampilkan data terbaru.
+  Future<void> _bukaFormTambah() async {
+    final berhasil = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const TambahPesananScreen(),
+      ),
+    );
+
+    // Halaman bisa saja sudah ditutup saat form masih terbuka.
+    if (!mounted || berhasil != true) return;
+
+    setState(() {});
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Pesanan baru berhasil disimpan.'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -69,9 +97,11 @@ class _HomeShellState extends State<HomeShell> {
           DashboardScreen(
             onLihatSemua: _bukaDaftarPesanan,
             onPesananTap: _bukaDetailPesanan,
+            onTambah: _bukaFormTambah,
           ),
           DaftarPesananScreen(
             onPesananTap: _bukaDetailPesanan,
+            onTambah: _bukaFormTambah,
           ),
         ],
       ),

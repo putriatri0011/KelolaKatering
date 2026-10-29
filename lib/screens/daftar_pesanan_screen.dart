@@ -13,8 +13,8 @@ import '../widgets/pesanan_card.dart';
 ///
 /// Jika daftar kosong, menampilkan [EmptyState].
 ///
-/// Pada tahap Modul 6 ini, tombol "Tambah Pesanan" hanya
-/// menampilkan SnackBar karena formulir belum dibuat.
+/// Pada Modul 7, tombol "Tambah Pesanan" membuka Form Tambah Pesanan
+/// melalui [onTambah].
 ///
 /// Navigasi:
 /// - Tap pada [PesananCard] membuka Detail Pesanan
@@ -26,9 +26,15 @@ class DaftarPesananScreen extends StatelessWidget {
   /// ke halaman Detail Pesanan.
   final void Function(Pesanan pesanan)? onPesananTap;
 
+  /// Callback ketika tombol tambah pesanan (FAB) ditekan.
+  ///
+  /// Dipanggil oleh [HomeShell] untuk membuka Form Tambah Pesanan.
+  final VoidCallback? onTambah;
+
   const DaftarPesananScreen({
     super.key,
     this.onPesananTap,
+    this.onTambah,
   });
 
   @override
@@ -66,18 +72,12 @@ class DaftarPesananScreen extends StatelessWidget {
               },
             ),
       // ── FAB: Tambah Pesanan ────────────────────────────────────
-      // Formulir belum dibuat pada Modul 6.
-      // Tombol hanya menampilkan SnackBar informatif.
+      // Membuka Form Tambah Pesanan lewat callback [onTambah].
+      // heroTag unik agar tidak bentrok dengan FAB Dashboard yang
+      // berada dalam satu IndexedStack.
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Fitur tambah pesanan akan dibuat pada tahap berikutnya.',
-              ),
-            ),
-          );
-        },
+        heroTag: 'fab-daftar-pesanan',
+        onPressed: onTambah,
         tooltip: 'Tambah Pesanan',
         child: const Icon(Icons.add),
       ),
