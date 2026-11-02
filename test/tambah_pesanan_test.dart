@@ -1,7 +1,8 @@
 // Pengujian form Tambah Pesanan (Modul 7).
 //
 // Setiap pengujian memakai aplikasi utuh agar alur yang diuji sama
-// dengan alur nyata: Dashboard -> tombol + -> Form -> Simpan.
+// dengan alur nyata: Dashboard -> Tambah Pesanan -> Form -> Simpan.
+// Layar uji 800 px termasuk layar lebar, sehingga navigasinya sidebar.
 //
 // Data pada MockData bersifat statis dan dipakai bersama, sehingga
 // setiap pengujian menyimpan salinan data awal lalu mengembalikannya
@@ -45,9 +46,9 @@ void main() {
     await tester.pumpWidget(const KelolaKateringApp());
     await tester.pumpAndSettle();
 
-    // Dua FAB ada di pohon widget (Dashboard & Daftar Pesanan karena
-    // IndexedStack); yang pertama adalah milik Dashboard.
-    await tester.tap(find.byType(FloatingActionButton).first);
+    // Tombol "Tambah Pesanan" milik Dashboard diberi key tersendiri
+    // karena Daftar Pesanan juga punya tombol yang sama.
+    await tester.tap(find.byKey(const Key('tambah-dashboard')));
     await tester.pumpAndSettle();
   }
 
@@ -95,7 +96,7 @@ void main() {
     expect(find.text('Nama pelanggan wajib diisi'), findsOneWidget);
     expect(find.text('Menu wajib diisi'), findsOneWidget);
     expect(find.text('Jumlah porsi wajib diisi'), findsOneWidget);
-    expect(find.text('Tanggal kirim wajib diisi'), findsOneWidget);
+    expect(find.text('Tanggal pengiriman wajib diisi'), findsOneWidget);
     expect(
       find.text('Periksa kembali isian yang ditandai merah.'),
       findsOneWidget,
@@ -135,7 +136,7 @@ void main() {
     await tekan(tester, find.text('Simpan Pesanan'));
 
     expect(
-      find.text('Nomor HP harus 10-15 digit dan diawali angka 0'),
+      find.text('Nomor WhatsApp harus 10-15 digit dan diawali angka 0'),
       findsOneWidget,
     );
     expect(
@@ -183,11 +184,11 @@ void main() {
       findsOneWidget,
     );
 
-    // Pindah ke tab Daftar Pesanan.
-    await tester.tap(find.text('Pesanan'));
+    // Pindah ke menu Daftar Pesanan (sidebar, karena layar uji lebar).
+    await tester.tap(find.byKey(const Key('nav-daftar-pesanan')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Daftar Pesanan'), findsOneWidget);
+    expect(find.text('Daftar Pesanan'), findsWidgets);
     expect(
       find.descendant(
         of: find.byType(DaftarPesananScreen),
