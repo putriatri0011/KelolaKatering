@@ -27,7 +27,7 @@ extension StatusPesananUI on StatusPesanan {
   String get label {
     switch (this) {
       case StatusPesanan.baru:
-        return 'Baru';
+        return 'Pesanan Baru';
       case StatusPesanan.diproses:
         return 'Diproses';
       case StatusPesanan.siapDikirim:
@@ -51,8 +51,19 @@ extension StatusPesananUI on StatusPesanan {
     }
   }
 
-  /// Warna latar muda untuk badge (opacity 0.15).
-  Color get lightColor => color.withValues(alpha: 0.15);
+  /// Warna latar badge sesuai style guide Figma.
+  Color get lightColor {
+    switch (this) {
+      case StatusPesanan.baru:
+        return AppTheme.statusBaruLatar;
+      case StatusPesanan.diproses:
+        return AppTheme.statusDiprosesLatar;
+      case StatusPesanan.siapDikirim:
+        return AppTheme.statusSiapKirimLatar;
+      case StatusPesanan.selesai:
+        return AppTheme.statusSelesaiLatar;
+    }
+  }
 
   /// Ikon Material yang mewakili status.
   IconData get icon {
@@ -95,8 +106,17 @@ extension StatusPembayaranUI on StatusPembayaran {
     }
   }
 
-  /// Warna latar muda untuk badge (opacity 0.15).
-  Color get lightColor => color.withValues(alpha: 0.15);
+  /// Warna latar badge sesuai style guide Figma.
+  Color get lightColor {
+    switch (this) {
+      case StatusPembayaran.belumBayar:
+        return AppTheme.bayarBelumLatar;
+      case StatusPembayaran.dp:
+        return AppTheme.bayarDPLatar;
+      case StatusPembayaran.lunas:
+        return AppTheme.bayarLunasLatar;
+    }
+  }
 
   /// Ikon Material yang mewakili status pembayaran.
   IconData get icon {

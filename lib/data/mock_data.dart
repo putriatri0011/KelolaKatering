@@ -106,6 +106,44 @@ class MockData {
     return 'PSN-${(nomorTerbesar + 1).toString().padLeft(3, '0')}';
   }
 
+  /// Mencari pesanan berdasarkan [id]. Mengembalikan null bila tidak ada
+  /// (misalnya pesanan sudah dihapus).
+  static Pesanan? cariById(String id) {
+    for (final pesanan in pesananList) {
+      if (pesanan.id == id) return pesanan;
+    }
+    return null;
+  }
+
+  /// Mengganti data pesanan yang ID-nya sama dengan [pesanan].
+  ///
+  /// Dipakai saat admin mengubah status di Detail Pesanan atau
+  /// menyimpan Form Edit Pesanan. Posisi pesanan di list tidak berubah.
+  /// Mengembalikan false bila ID tidak ditemukan.
+  static bool perbarui(Pesanan pesanan) {
+    final indeks = pesananList.indexWhere((p) => p.id == pesanan.id);
+    if (indeks == -1) return false;
+    pesananList[indeks] = pesanan;
+    return true;
+  }
+
+  /// Menghapus pesanan dengan [id]. Mengembalikan false bila tidak ada.
+  static bool hapus(String id) {
+    final jumlahAwal = pesananList.length;
+    pesananList.removeWhere((p) => p.id == id);
+    return pesananList.length < jumlahAwal;
+  }
+
+  /// Pesanan yang nama pelanggannya memuat [kata] (tidak peka huruf besar
+  /// kecil). Kata kosong mengembalikan seluruh pesanan.
+  static List<Pesanan> cariNama(String kata) {
+    final kunci = kata.trim().toLowerCase();
+    if (kunci.isEmpty) return List<Pesanan>.of(pesananList);
+    return pesananList
+        .where((p) => p.namaPelanggan.toLowerCase().contains(kunci))
+        .toList();
+  }
+
   /// Jumlah pesanan dengan status [StatusPesanan.baru].
   static int get jumlahBaru =>
       pesananList.where((p) => p.statusPesanan == StatusPesanan.baru).length;
@@ -113,4 +151,10 @@ class MockData {
   /// Jumlah pesanan dengan status [StatusPesanan.diproses].
   static int get jumlahDiproses =>
       pesananList.where((p) => p.statusPesanan == StatusPesanan.diproses).length;
+
+  /// Jumlah pesanan dengan status pembayaran [status].
+  ///
+  /// Dipakai kartu Ringkasan Pembayaran di Dashboard.
+  static int jumlahPembayaran(StatusPembayaran status) =>
+      pesananList.where((p) => p.statusPembayaran == status).length;
 }
