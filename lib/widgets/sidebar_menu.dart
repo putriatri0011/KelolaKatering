@@ -106,12 +106,18 @@ class _ItemMenu extends StatelessWidget {
             children: [
               Icon(ikon, size: 18, color: warna),
               const SizedBox(width: AppTheme.spacing8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: AppTheme.isi,
-                  fontWeight: aktif ? FontWeight.w600 : FontWeight.w400,
-                  color: warna,
+              // Expanded + ellipsis agar label tidak meluber bila ukuran
+              // huruf sistem diperbesar.
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTheme.isi,
+                    fontWeight: aktif ? FontWeight.w600 : FontWeight.w400,
+                    color: warna,
+                  ),
                 ),
               ),
             ],
