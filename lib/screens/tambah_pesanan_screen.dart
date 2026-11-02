@@ -358,9 +358,25 @@ class _TambahPesananScreenState extends State<TambahPesananScreen> {
                     keyboardType: TextInputType.number,
                     textInputAction: TextInputAction.next,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    // "Rp" dipasang sebagai prefixIcon agar selalu terlihat.
+                    // prefixText baru muncul setelah kolom diklik, sehingga
+                    // kolom kosong tampak bergeser.
                     decoration: const InputDecoration(
-                      hintText: '0',
-                      prefixText: 'Rp ',
+                      hintText: 'Contoh: 1750000',
+                      prefixIcon: Padding(
+                        padding: EdgeInsets.only(
+                          left: AppTheme.spacing12,
+                          right: AppTheme.spacing4,
+                        ),
+                        child: Text(
+                          'Rp',
+                          style: TextStyle(
+                            fontSize: AppTheme.isi,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ),
+                      prefixIconConstraints: BoxConstraints(minWidth: 0),
                       helperText: 'Opsional. Tanpa titik atau koma.',
                     ),
                     validator: _validasiHarga,
