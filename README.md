@@ -20,6 +20,7 @@ Sistem Informasi, Universitas Stikubank.
 | Kelas | A1 |
 | Judul aplikasi | KelolaKatering: Aplikasi Pencatatan Pesanan Katering |
 | Rancangan Figma | [KelolaKatering Wireframe](https://www.figma.com/design/OyxsoD8sEsPeDLm1hT4DNS/KelolaKatering-%E2%80%94-Wireframe-Baru-Modul-1%E2%80%933?node-id=0-1) |
+| Video presentasi UTS | [youtu.be/GexeyTzHPTQ](https://youtu.be/GexeyTzHPTQ) |
 
 ## Fitur
 
