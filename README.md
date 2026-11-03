@@ -11,6 +11,16 @@ tetap memesan lewat WhatsApp.
 Proyek individu mata kuliah Mobile and Web Application Development,
 Sistem Informasi, Universitas Stikubank.
 
+## Identitas
+
+| | |
+|---|---|
+| Nama | Putria Tri Ariibah |
+| NIM | 23.01.55.0011 |
+| Kelas | A1 |
+| Judul aplikasi | KelolaKatering: Aplikasi Pencatatan Pesanan Katering |
+| Rancangan Figma | [KelolaKatering Wireframe](https://www.figma.com/design/OyxsoD8sEsPeDLm1hT4DNS/KelolaKatering-%E2%80%94-Wireframe-Baru-Modul-1%E2%80%933?node-id=0-1) |
+
 ## Fitur
 
 - Dashboard: jumlah pesanan baru dan yang sedang diproses, ringkasan
