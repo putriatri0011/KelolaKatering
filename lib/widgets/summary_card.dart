@@ -2,80 +2,56 @@ import 'package:flutter/material.dart';
 
 import '../utils/theme.dart';
 
-/// Kartu ringkasan yang menampilkan angka, label, dan ikon.
+/// Kotak ringkasan berisi satu angka besar dan labelnya.
 ///
-/// Digunakan di Dashboard untuk menampilkan jumlah pesanan
-/// per status (misal: Pesanan Baru, Pesanan Diproses).
+/// Sesuai wireframe Figma: latar abu muda (warna permukaan), angka
+/// tebal berwarna primer, label kecil di bawahnya. Dipakai di Dashboard
+/// untuk "Pesanan Baru", "Sedang Diproses", dan, pada layar lebar,
+/// jumlah per status pembayaran.
 ///
-/// Widget ini tidak terhubung ke sumber data apapun.
-/// Nilai [value] dan [title] diberikan oleh pemanggil.
+/// Widget ini tidak terhubung ke sumber data. Nilai diberikan pemanggil.
 class SummaryCard extends StatelessWidget {
   /// Label deskriptif, misalnya "Pesanan Baru".
   final String title;
 
-  /// Nilai angka yang ditampilkan, misalnya jumlah pesanan.
+  /// Nilai angka yang ditampilkan.
   final int value;
-
-  /// Ikon yang mewakili kategori ringkasan.
-  final IconData icon;
-
-  /// Warna aksen untuk ikon dan latar ikon.
-  ///
-  /// Default: [AppTheme.primary].
-  final Color color;
 
   const SummaryCard({
     super.key,
     required this.title,
     required this.value,
-    required this.icon,
-    this.color = AppTheme.primary,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppTheme.spacing16),
-        child: Row(
-          children: [
-            // ── Ikon dalam container berwarna ────────────────────
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppTheme.sudutKartu),
-              ),
-              child: Icon(icon, color: color, size: 24),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppTheme.spacing12),
+      decoration: BoxDecoration(
+        color: AppTheme.permukaan,
+        borderRadius: BorderRadius.circular(AppTheme.sudutKartu),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$value',
+            style: const TextStyle(
+              fontSize: AppTheme.judul,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.primary,
             ),
-            const SizedBox(width: AppTheme.spacing16),
-            // ── Angka dan label ───────────────────────────────────
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$value',
-                    style: const TextStyle(
-                      fontSize: AppTheme.judul,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: AppTheme.isi,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
+          ),
+          const SizedBox(height: AppTheme.spacing4),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: AppTheme.keterangan,
+              color: AppTheme.textSecondary,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

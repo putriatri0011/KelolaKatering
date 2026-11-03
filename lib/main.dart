@@ -6,6 +6,7 @@ import 'screens/dashboard_screen.dart';
 import 'screens/detail_pesanan_screen.dart';
 import 'screens/tambah_pesanan_screen.dart';
 import 'utils/theme.dart';
+import 'widgets/sidebar_menu.dart';
 
 void main() {
   runApp(const KelolaKateringApp());
@@ -29,10 +30,15 @@ class KelolaKateringApp extends StatelessWidget {
   }
 }
 
-/// Halaman utama yang membungkus Dashboard dan Daftar Pesanan
-/// dengan [NavigationBar] (Material 3) untuk navigasi tab.
+/// Pembungkus dua tujuan utama: Dashboard dan Daftar Pesanan.
 ///
-/// Index 0 = Dashboard, Index 1 = Daftar Pesanan.
+/// Sesuai rancangan navigasi Modul 3 dan wireframe Figma:
+/// - ponsel (lebar < 600 px): [NavigationBar] di bawah;
+/// - layar lebar (lebar ≥ 600 px): [SidebarMenu] di kiri.
+/// Isi dan urutan menu sama di keduanya.
+///
+/// Index 0 = Dashboard, Index 1 = Daftar Pesanan. [IndexedStack] menjaga
+/// state tiap tab (mis. kata pencarian) saat berpindah tab.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -43,37 +49,35 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _currentIndex = 0;
 
-  /// Beralih ke tab Daftar Pesanan (index 1).
-  void _bukaDaftarPesanan() {
-    setState(() {
-      _currentIndex = 1;
-    });
+  void _pilihTab(int index) {
+    setState(() => _currentIndex = index);
   }
 
-  /// Navigasi ke halaman Detail Pesanan dengan meneruskan
-  /// objek [pesanan] yang dipilih pengguna.
-  void _bukaDetailPesanan(Pesanan pesanan) {
-    Navigator.push(
+  /// Membuka Detail Pesanan. Setelah kembali, halaman digambar ulang
+  /// karena status bisa saja diubah, pesanan diedit, atau dihapus.
+  Future<void> _bukaDetailPesanan(Pesanan pesanan) async {
+    final hasil = await Navigator.push<HasilDetail>(
       context,
       MaterialPageRoute(
         builder: (context) => DetailPesananScreen(pesanan: pesanan),
       ),
     );
+    if (!mounted) return;
+    setState(() {});
+
+    if (hasil == HasilDetail.dihapus) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Pesanan dihapus.')));
+    }
   }
 
   /// Membuka Form Tambah Pesanan, lalu menggambar ulang halaman
   /// ketika pengguna berhasil menyimpan pesanan baru.
-  ///
-  /// Form mengembalikan `true` melalui [Navigator.pop] bila data valid
-  /// dan sudah ditambahkan ke `MockData.pesananList`. Pemanggilan
-  /// [setState] membuat Dashboard (ringkasan & pesanan terbaru) dan
-  /// Daftar Pesanan menampilkan data terbaru.
   Future<void> _bukaFormTambah() async {
     final berhasil = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(
-        builder: (context) => const TambahPesananScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const TambahPesananScreen()),
     );
 
     // Halaman bisa saja sudah ditutup saat form masih terbuka.
@@ -81,47 +85,63 @@ class _HomeShellState extends State<HomeShell> {
 
     setState(() {});
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Pesanan baru berhasil disimpan.'),
-      ),
-    );
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(content: Text('Pesanan baru berhasil disimpan.')),
+      );
   }
 
   @override
   Widget build(BuildContext context) {
+    final lebar = AppTheme.layarLebar(context);
+
+    final halaman = IndexedStack(
+      index: _currentIndex,
+      children: [
+        DashboardScreen(
+          onLihatSemua: () => _pilihTab(1),
+          onPesananTap: _bukaDetailPesanan,
+          onTambah: _bukaFormTambah,
+        ),
+        DaftarPesananScreen(
+          onPesananTap: _bukaDetailPesanan,
+          onTambah: _bukaFormTambah,
+        ),
+      ],
+    );
+
+    if (lebar) {
+      return Scaffold(
+        body: Row(
+          children: [
+            SidebarMenu(
+              indeksAktif: _currentIndex,
+              onPilih: _pilihTab,
+            ),
+            Expanded(child: halaman),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          DashboardScreen(
-            onLihatSemua: _bukaDaftarPesanan,
-            onPesananTap: _bukaDetailPesanan,
-            onTambah: _bukaFormTambah,
-          ),
-          DaftarPesananScreen(
-            onPesananTap: _bukaDetailPesanan,
-            onTambah: _bukaFormTambah,
-          ),
-        ],
-      ),
+      body: halaman,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        onDestinationSelected: _pilihTab,
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
+            key: Key('nav-dashboard'),
+            icon: Icon(Icons.grid_view_outlined),
+            selectedIcon: Icon(Icons.grid_view),
             label: 'Dashboard',
           ),
           NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'Pesanan',
+            key: Key('nav-daftar-pesanan'),
+            icon: Icon(Icons.list),
+            selectedIcon: Icon(Icons.list),
+            label: 'Daftar Pesanan',
           ),
         ],
       ),

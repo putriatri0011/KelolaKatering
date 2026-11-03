@@ -33,6 +33,8 @@ class EmptyState extends StatelessWidget {
         padding: const EdgeInsets.all(AppTheme.spacing24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          // min agar aman dipakai di dalam ListView (tinggi tak terbatas).
+          mainAxisSize: MainAxisSize.min,
           children: [
             // ── Ikon ──────────────────────────────────────────────
             Icon(

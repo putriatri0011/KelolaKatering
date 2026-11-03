@@ -2,46 +2,39 @@ import 'package:flutter/material.dart';
 
 import '../data/mock_data.dart';
 import '../models/pesanan_model.dart';
+import '../utils/format.dart';
 import '../utils/theme.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/pesanan_card.dart';
+import '../widgets/pesanan_table.dart';
+import '../widgets/ringkasan_pembayaran_card.dart';
 import '../widgets/summary_card.dart';
+import '../widgets/tombol_tambah_pesanan.dart';
 
-/// Halaman utama Dashboard KelolaKatering.
+/// Halaman Dashboard KelolaKatering.
 ///
-/// Menampilkan ringkasan jumlah pesanan (Baru & Diproses)
-/// serta daftar pesanan terbaru menggunakan data simulasi
-/// dari [MockData].
-///
-/// Pada Modul 7, tombol "Tambah Pesanan" membuka Form Tambah Pesanan
-/// melalui [onTambah].
+/// Susunan mengikuti wireframe Figma:
+/// - Ponsel: sapaan dan tanggal hari ini, dua kotak ringkasan
+///   (Pesanan Baru, Sedang Diproses), kotak Ringkasan Pembayaran,
+///   tiga Pesanan Terbaru, dan tombol "Tambah Pesanan" selebar layar.
+/// - Layar lebar: judul halaman dengan tombol "Tambah Pesanan" di kanan
+///   atas, lima kotak ringkasan sebaris, dan tabel Pesanan Terbaru.
 ///
 /// Navigasi:
-/// - Tombol "Lihat Semua" beralih ke tab Daftar Pesanan
-///   via [onLihatSemua].
-/// - Tap pada [PesananCard] membuka Detail Pesanan
-///   via [onPesananTap].
+/// - "Lihat semua" beralih ke tab Daftar Pesanan via [onLihatSemua].
+/// - Kartu atau baris pesanan membuka Detail Pesanan via [onPesananTap].
+/// - Tombol "Tambah Pesanan" membuka Form Tambah Pesanan via [onTambah].
 class DashboardScreen extends StatelessWidget {
-  /// Jumlah pesanan terbaru yang ditampilkan di Dashboard.
-  ///
-  /// Dibatasi agar Dashboard tetap ringkas.
+  /// Jumlah pesanan terbaru yang ditampilkan agar Dashboard tetap ringkas.
   static const int _batasPesananTerbaru = 3;
 
-  /// Callback ketika tombol "Lihat Semua" ditekan.
-  ///
-  /// Dipanggil oleh [HomeShell] untuk beralih ke tab
-  /// Daftar Pesanan. Jika null, tombol tidak ditampilkan.
+  /// Callback ketika "Lihat semua" ditekan. Jika null, link disembunyikan.
   final VoidCallback? onLihatSemua;
 
-  /// Callback ketika sebuah [PesananCard] ditekan.
-  ///
-  /// Menerima objek [Pesanan] yang dipilih untuk diteruskan
-  /// ke halaman Detail Pesanan.
+  /// Callback ketika sebuah pesanan ditekan.
   final void Function(Pesanan pesanan)? onPesananTap;
 
-  /// Callback ketika tombol tambah pesanan (FAB) ditekan.
-  ///
-  /// Dipanggil oleh [HomeShell] untuk membuka Form Tambah Pesanan.
+  /// Callback ketika tombol "Tambah Pesanan" ditekan.
   final VoidCallback? onTambah;
 
   const DashboardScreen({
@@ -53,142 +46,210 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ── Mengambil data dari sumber simulasi ─────────────────────
-    // Tidak mengubah atau menghapus data sumber.
+    final lebar = AppTheme.layarLebar(context);
     final semuaPesanan = MockData.pesananList;
-    final jumlahBaru = MockData.jumlahBaru;
-    final jumlahDiproses = MockData.jumlahDiproses;
+    final pesananTerbaru = semuaPesanan.take(_batasPesananTerbaru).toList();
+    final tanggalHariIni = Format.tanggalPanjang(DateTime.now());
 
-    // Ambil pesanan terbaru (dibatasi) tanpa memodifikasi list asli.
-    final pesananTerbaru =
-        semuaPesanan.take(_batasPesananTerbaru).toList();
+    final isi = <Widget>[
+      if (lebar)
+        _KepalaLebar(tanggal: tanggalHariIni, onTambah: onTambah)
+      else
+        _SapaanPonsel(tanggal: tanggalHariIni),
+      const SizedBox(height: AppTheme.spacing16),
+      if (semuaPesanan.isEmpty)
+        const EmptyState(
+          icon: Icons.inbox_outlined,
+          title: 'Belum ada pesanan',
+          subtitle: 'Catat pesanan pertama dari WhatsApp pelanggan Anda.',
+        )
+      else ...[
+        // Sengaja tidak const: widget const tidak dibangun ulang saat
+        // HomeShell memanggil setState, sehingga angka tidak diperbarui.
+        // ignore: prefer_const_constructors
+        if (lebar) _RingkasanLebar() else _RingkasanPonsel(),
+        const SizedBox(height: AppTheme.spacing24),
+        Row(
+          children: [
+            const Expanded(
+              child: Text('Pesanan Terbaru', style: AppTheme.gayaSeksi),
+            ),
+            if (onLihatSemua != null)
+              TextButton(
+                key: const Key('lihat-semua'),
+                onPressed: onLihatSemua,
+                child: const Text('Lihat semua'),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppTheme.spacing8),
+        if (lebar)
+          PesananTable(daftar: pesananTerbaru, onPesananTap: onPesananTap)
+        else
+          for (final pesanan in pesananTerbaru)
+            PesananCard(
+              pesanan: pesanan,
+              tampilkanHarga: false,
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              onTap: onPesananTap == null
+                  ? null
+                  : () => onPesananTap!(pesanan),
+            ),
+      ],
+    ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Dashboard'),
+      appBar: lebar ? null : AppBar(title: const Text('Dashboard')),
+      body: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.all(
+            lebar ? AppTheme.spacing24 : AppTheme.marginTepi,
+          ),
+          children: isi,
+        ),
       ),
-      body: semuaPesanan.isEmpty
-          ? EmptyState(
-              icon: Icons.inbox_outlined,
-              title: 'Belum Ada Pesanan',
-              subtitle:
-                  'Tap tombol + untuk mencatat pesanan pertama.',
-            )
-          : SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: AppTheme.spacing16,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── Section: Ringkasan ──────────────────────────
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppTheme.marginTepi,
-                      ),
-                      child: Text(
-                        'Ringkasan',
-                        style: const TextStyle(
-                          fontSize: AppTheme.subjudul,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppTheme.spacing8),
-                    // Dua SummaryCard berdampingan (lebar layar cukup)
-                    // atau tersusun vertikal (layar sempit).
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppTheme.marginTepi,
-                      ),
-                      child: Wrap(
-                        spacing: AppTheme.spacing8,
-                        runSpacing: AppTheme.spacing8,
-                        children: [
-                          SummaryCard(
-                            title: 'Pesanan Baru',
-                            value: jumlahBaru,
-                            icon: Icons.fiber_new_outlined,
-                            color: AppTheme.statusBaru,
-                          ),
-                          SummaryCard(
-                            title: 'Pesanan Diproses',
-                            value: jumlahDiproses,
-                            icon: Icons.sync_outlined,
-                            color: AppTheme.statusDiproses,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppTheme.spacing24),
-                    // ── Section: Pesanan Terbaru ────────────────────
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppTheme.marginTepi,
-                      ),
-                      child: Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Expanded agar judul menyusut/membungkus bila
-                          // ruang tidak cukup (layar sempit atau ukuran
-                          // font sistem diperbesar), sehingga baris ini
-                          // tidak lagi memicu RenderFlex overflow.
-                          Expanded(
-                            child: Text(
-                              'Pesanan Terbaru',
-                              style: const TextStyle(
-                                fontSize: AppTheme.subjudul,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                          ),
-                          if (semuaPesanan.length >
-                                  _batasPesananTerbaru &&
-                              onLihatSemua != null)
-                            TextButton(
-                              onPressed: onLihatSemua,
-                              child: const Text('Lihat Semua'),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppTheme.spacing8),
-                    // ── Daftar PesananCard ──────────────────────────
-                    if (pesananTerbaru.isEmpty)
-                      const EmptyState(
-                        icon: Icons.receipt_long_outlined,
-                        title: 'Belum Ada Pesanan Terbaru',
-                      )
-                    else
-                      ...pesananTerbaru.map(
-                        (pesanan) => PesananCard(
-                          pesanan: pesanan,
-                          onTap: onPesananTap != null
-                              ? () => onPesananTap!(pesanan)
-                              : null,
-                        ),
-                      ),
-                    // ── Footer spacing untuk FAB ───────────────────
-                    const SizedBox(height: 80),
-                  ],
+      bottomNavigationBar: lebar
+          ? null
+          : TombolTambahPesanan.bawah(
+              key: const Key('tambah-dashboard'),
+              onPressed: onTambah,
+            ),
+    );
+  }
+}
+
+/// Sapaan di bagian atas Dashboard ponsel.
+class _SapaanPonsel extends StatelessWidget {
+  final String tanggal;
+
+  const _SapaanPonsel({required this.tanggal});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Halo, Admin', style: AppTheme.gayaSeksi),
+        const SizedBox(height: 2),
+        Text(
+          tanggal,
+          style: const TextStyle(
+            fontSize: AppTheme.keterangan,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Kepala halaman Dashboard pada layar lebar.
+class _KepalaLebar extends StatelessWidget {
+  final String tanggal;
+  final VoidCallback? onTambah;
+
+  const _KepalaLebar({required this.tanggal, this.onTambah});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Dashboard',
+                style: TextStyle(
+                  fontSize: AppTheme.judul,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
                 ),
               ),
+              Text(
+                'Halo, Admin · $tanggal',
+                style: const TextStyle(
+                  fontSize: AppTheme.keterangan,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppTheme.spacing16),
+        TombolTambahPesanan.ringkas(
+          key: const Key('tambah-dashboard'),
+          onPressed: onTambah,
+        ),
+      ],
+    );
+  }
+}
+
+/// Ringkasan ponsel: dua kotak status pesanan dan Ringkasan Pembayaran.
+class _RingkasanPonsel extends StatelessWidget {
+  const _RingkasanPonsel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: SummaryCard(
+                title: 'Pesanan Baru',
+                value: MockData.jumlahBaru,
+              ),
             ),
-      // ── FAB: Tambah Pesanan ────────────────────────────────────
-      // Membuka Form Tambah Pesanan lewat callback [onTambah].
-      // heroTag unik karena Dashboard dan Daftar Pesanan sama-sama
-      // memiliki FAB di dalam satu IndexedStack; tag bawaan yang sama
-      // memicu error "multiple heroes that share the same tag".
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'fab-dashboard',
-        onPressed: onTambah,
-        tooltip: 'Tambah Pesanan',
-        child: const Icon(Icons.add),
-      ),
+            const SizedBox(width: AppTheme.spacing8),
+            Expanded(
+              child: SummaryCard(
+                title: 'Sedang Diproses',
+                value: MockData.jumlahDiproses,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppTheme.spacing8),
+        // ignore: prefer_const_constructors
+        RingkasanPembayaranCard(jumlahUntuk: MockData.jumlahPembayaran),
+      ],
+    );
+  }
+}
+
+/// Ringkasan layar lebar: lima kotak sebaris (dua kolom bila sempit).
+class _RingkasanLebar extends StatelessWidget {
+  const _RingkasanLebar();
+
+  @override
+  Widget build(BuildContext context) {
+    final kotak = <SummaryCard>[
+      SummaryCard(title: 'Pesanan Baru', value: MockData.jumlahBaru),
+      SummaryCard(title: 'Sedang Diproses', value: MockData.jumlahDiproses),
+      for (final status in StatusPembayaran.values)
+        SummaryCard(
+          title: status.label,
+          value: MockData.jumlahPembayaran(status),
+        ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final kolom = constraints.maxWidth >= 640 ? kotak.length : 2;
+        const jarak = AppTheme.spacing12;
+        final lebarKotak =
+            (constraints.maxWidth - jarak * (kolom - 1)) / kolom;
+        return Wrap(
+          spacing: jarak,
+          runSpacing: jarak,
+          children: [
+            for (final k in kotak) SizedBox(width: lebarKotak, child: k),
+          ],
+        );
+      },
     );
   }
 }
