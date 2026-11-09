@@ -43,7 +43,9 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(const KelolaKateringApp());
+    await tester.pumpWidget(
+      const KelolaKateringApp(halamanAwal: HomeShell()),
+    );
     await tester.pumpAndSettle();
 
     // Tombol "Tambah Pesanan" milik Dashboard diberi key tersendiri

@@ -15,7 +15,9 @@ void main() {
     WidgetTester tester,
   ) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const KelolaKateringApp());
+    await tester.pumpWidget(
+      const KelolaKateringApp(halamanAwal: HomeShell()),
+    );
 
     // Layar uji bawaan 800 x 600 termasuk layar lebar: "Dashboard" tampil
     // sebagai judul halaman dan sebagai menu sidebar.

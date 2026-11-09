@@ -24,6 +24,8 @@ import '../widgets/tombol_tambah_pesanan.dart';
 /// - "Lihat semua" beralih ke tab Daftar Pesanan via [onLihatSemua].
 /// - Kartu atau baris pesanan membuka Detail Pesanan via [onPesananTap].
 /// - Tombol "Tambah Pesanan" membuka Form Tambah Pesanan via [onTambah].
+/// - Tombol Keluar di app bar ponsel memanggil [onKeluar]. Di layar lebar
+///   tombol Keluar ada di sidebar.
 class DashboardScreen extends StatelessWidget {
   /// Jumlah pesanan terbaru yang ditampilkan agar Dashboard tetap ringkas.
   static const int _batasPesananTerbaru = 3;
@@ -37,11 +39,15 @@ class DashboardScreen extends StatelessWidget {
   /// Callback ketika tombol "Tambah Pesanan" ditekan.
   final VoidCallback? onTambah;
 
+  /// Callback ketika tombol Keluar ditekan. Jika null, tombol disembunyikan.
+  final VoidCallback? onKeluar;
+
   const DashboardScreen({
     super.key,
     this.onLihatSemua,
     this.onPesananTap,
     this.onTambah,
+    this.onKeluar,
   });
 
   @override
@@ -99,7 +105,20 @@ class DashboardScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      appBar: lebar ? null : AppBar(title: const Text('Dashboard')),
+      appBar: lebar
+          ? null
+          : AppBar(
+              title: const Text('Dashboard'),
+              actions: [
+                if (onKeluar != null)
+                  IconButton(
+                    key: const Key('tombol-keluar'),
+                    tooltip: 'Keluar',
+                    icon: const Icon(Icons.logout),
+                    onPressed: onKeluar,
+                  ),
+              ],
+            ),
       body: SafeArea(
         child: ListView(
           padding: EdgeInsets.all(

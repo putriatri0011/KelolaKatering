@@ -7,6 +7,7 @@ import '../utils/theme.dart';
 /// Sesuai rancangan web Figma: nama aplikasi di atas, lalu menu
 /// Dashboard dan Daftar Pesanan dengan urutan yang sama seperti
 /// navigasi bawah di ponsel. Menu aktif berlatar primer.
+/// Tombol Keluar ada di bagian bawah sidebar.
 class SidebarMenu extends StatelessWidget {
   /// Index menu aktif: 0 = Dashboard, 1 = Daftar Pesanan.
   final int indeksAktif;
@@ -14,10 +15,14 @@ class SidebarMenu extends StatelessWidget {
   /// Dipanggil dengan index menu yang dipilih.
   final ValueChanged<int> onPilih;
 
+  /// Callback ketika Keluar ditekan. Jika null, tombol disembunyikan.
+  final VoidCallback? onKeluar;
+
   const SidebarMenu({
     super.key,
     required this.indeksAktif,
     required this.onPilih,
+    this.onKeluar,
   });
 
   @override
@@ -66,6 +71,15 @@ class SidebarMenu extends StatelessWidget {
                 aktif: indeksAktif == 1,
                 onTap: () => onPilih(1),
               ),
+              const Spacer(),
+              if (onKeluar != null)
+                _ItemMenu(
+                  key: const Key('tombol-keluar'),
+                  ikon: Icons.logout,
+                  label: 'Keluar',
+                  aktif: false,
+                  onTap: onKeluar!,
+                ),
             ],
           ),
         ),

@@ -1,6 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'firebase_options.dart';
 import 'models/pesanan_model.dart';
+import 'screens/cek_status_login.dart';
 import 'screens/daftar_pesanan_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/detail_pesanan_screen.dart';
@@ -8,16 +12,26 @@ import 'screens/tambah_pesanan_screen.dart';
 import 'utils/theme.dart';
 import 'widgets/sidebar_menu.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Firebase harus siap sebelum halaman pertama memakai FirebaseAuth.
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const KelolaKateringApp());
 }
 
 /// Root widget aplikasi KelolaKatering.
 ///
-/// Menggunakan [AppTheme.light] sebagai tema Material 3
-/// dan [HomeShell] sebagai halaman awal.
+/// Menggunakan [AppTheme.light] sebagai tema Material 3. Halaman awal
+/// adalah [CekStatusLogin]: Halaman Masuk bila belum login, [HomeShell]
+/// bila sudah. Pengujian dapat memberi [halamanAwal] lain agar tidak
+/// perlu menghubungi Firebase.
 class KelolaKateringApp extends StatelessWidget {
-  const KelolaKateringApp({super.key});
+  final Widget halamanAwal;
+
+  const KelolaKateringApp({
+    super.key,
+    this.halamanAwal = const CekStatusLogin(),
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +39,7 @@ class KelolaKateringApp extends StatelessWidget {
       title: 'KelolaKatering',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: const HomeShell(),
+      home: halamanAwal,
     );
   }
 }
@@ -52,6 +66,9 @@ class _HomeShellState extends State<HomeShell> {
   void _pilihTab(int index) {
     setState(() => _currentIndex = index);
   }
+
+  /// Keluar dari akun. [CekStatusLogin] lalu menampilkan Halaman Masuk.
+  Future<void> _keluar() => FirebaseAuth.instance.signOut();
 
   /// Membuka Detail Pesanan. Setelah kembali, halaman digambar ulang
   /// karena status bisa saja diubah, pesanan diedit, atau dihapus.
@@ -103,6 +120,7 @@ class _HomeShellState extends State<HomeShell> {
           onLihatSemua: () => _pilihTab(1),
           onPesananTap: _bukaDetailPesanan,
           onTambah: _bukaFormTambah,
+          onKeluar: _keluar,
         ),
         DaftarPesananScreen(
           onPesananTap: _bukaDetailPesanan,
@@ -118,6 +136,7 @@ class _HomeShellState extends State<HomeShell> {
             SidebarMenu(
               indeksAktif: _currentIndex,
               onPilih: _pilihTab,
+              onKeluar: _keluar,
             ),
             Expanded(child: halaman),
           ],

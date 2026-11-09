@@ -46,3 +46,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# File pribadi di luar kode aplikasi
+Modul_6_KelolaKatering_Final.docx
+video-remotion/
