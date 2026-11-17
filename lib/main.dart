@@ -3,12 +3,14 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
+import 'models/pengguna_model.dart';
 import 'models/pesanan_model.dart';
 import 'screens/cek_status_login.dart';
 import 'screens/daftar_pesanan_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/detail_pesanan_screen.dart';
 import 'screens/tambah_pesanan_screen.dart';
+import 'services/layanan_firestore.dart';
 import 'utils/theme.dart';
 import 'widgets/sidebar_menu.dart';
 
@@ -53,8 +55,15 @@ class KelolaKateringApp extends StatelessWidget {
 ///
 /// Index 0 = Dashboard, Index 1 = Daftar Pesanan. [IndexedStack] menjaga
 /// state tiap tab (mis. kata pencarian) saat berpindah tab.
+///
+/// Modul 10: saat dibuka, collection `menus` diisi bila masih kosong, dan
+/// Dashboard menyapa admin dengan nama dari collection `users`.
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key});
+  /// Layanan data. Null berarti memakai [LayananFirestore]; widget test
+  /// memberi [LayananMemori] agar tidak menghubungi Firebase.
+  final LayananKelolaKatering? layanan;
+
+  const HomeShell({super.key, this.layanan});
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -62,6 +71,26 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _currentIndex = 0;
+
+  late final LayananKelolaKatering _layanan;
+  late final Stream<Pengguna?> _streamPengguna;
+
+  @override
+  void initState() {
+    super.initState();
+    _layanan = widget.layanan ?? LayananFirestore();
+    _streamPengguna = _layanan.streamPenggunaAktif();
+    _siapkanMenu();
+  }
+
+  /// Auto-seed collection `menus`. Kegagalan tidak menghentikan aplikasi.
+  Future<void> _siapkanMenu() async {
+    try {
+      await _layanan.isiMenuAwalJikaKosong();
+    } catch (e) {
+      debugPrint('Gagal mengisi menu awal: $e');
+    }
+  }
 
   void _pilihTab(int index) {
     setState(() => _currentIndex = index);
@@ -116,11 +145,15 @@ class _HomeShellState extends State<HomeShell> {
     final halaman = IndexedStack(
       index: _currentIndex,
       children: [
-        DashboardScreen(
-          onLihatSemua: () => _pilihTab(1),
-          onPesananTap: _bukaDetailPesanan,
-          onTambah: _bukaFormTambah,
-          onKeluar: _keluar,
+        StreamBuilder<Pengguna?>(
+          stream: _streamPengguna,
+          builder: (context, snapshot) => DashboardScreen(
+            namaAdmin: snapshot.data?.namaLengkap,
+            onLihatSemua: () => _pilihTab(1),
+            onPesananTap: _bukaDetailPesanan,
+            onTambah: _bukaFormTambah,
+            onKeluar: _keluar,
+          ),
         ),
         DaftarPesananScreen(
           onPesananTap: _bukaDetailPesanan,

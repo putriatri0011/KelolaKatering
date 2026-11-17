@@ -92,6 +92,7 @@ void main() {
       await tester.tap(find.byKey(const Key('tombol-ganti-mode')));
       await tester.pumpAndSettle();
 
+      await isi(tester, const Key('kolom-nama-lengkap'), 'Putria Tri Ariibah');
       await isi(tester, const Key('kolom-email'), 'admin@kelolakatering.id');
       await isi(tester, const Key('kolom-password'), 'rahasia123');
       await isi(tester, const Key('kolom-ulangi-password'), 'rahasia123');
@@ -117,6 +118,25 @@ void main() {
     await kirim(tester);
 
     expect(find.text('Password tidak sama'), findsOneWidget);
+    expect(permintaan, isEmpty);
+  });
+
+  testWidgets('Mode Daftar mewajibkan Nama lengkap (Modul 10)', (
+    tester,
+  ) async {
+    await buka(tester);
+    expect(find.byKey(const Key('kolom-nama-lengkap')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('tombol-ganti-mode')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('kolom-nama-lengkap')), findsOneWidget);
+
+    await isi(tester, const Key('kolom-email'), 'baru@kelolakatering.id');
+    await isi(tester, const Key('kolom-password'), 'rahasia123');
+    await isi(tester, const Key('kolom-ulangi-password'), 'rahasia123');
+    await kirim(tester);
+
+    expect(find.text('Nama lengkap wajib diisi'), findsOneWidget);
     expect(permintaan, isEmpty);
   });
 

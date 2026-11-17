@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/layanan_firestore.dart';
 import '../utils/theme.dart';
 import '../utils/validasi_auth.dart';
 
@@ -19,6 +20,9 @@ typedef ProsesAuth = Future<void> Function(
 /// pesan kesalahan berlatar merah muda, kolom Email dan Password,
 /// tombol utama, lalu catatan "Khusus admin / pemilik katering".
 ///
+/// Modul 10: mode Daftar punya kolom Nama lengkap. Setelah daftar atau
+/// masuk berhasil, profil admin ditulis ke collection `users/{uid}`.
+///
 /// Setelah berhasil, halaman tidak memanggil Navigator. [CekStatusLogin]
 /// mendengar perubahan status login dan mengganti halaman sendiri.
 class MasukScreen extends StatefulWidget {
@@ -33,6 +37,7 @@ class MasukScreen extends StatefulWidget {
 
 class _MasukScreenState extends State<MasukScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _namaController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _ulangiController = TextEditingController();
@@ -48,25 +53,38 @@ class _MasukScreenState extends State<MasukScreen> {
 
   @override
   void dispose() {
+    _namaController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _ulangiController.dispose();
     super.dispose();
   }
 
-  static Future<void> _prosesFirebase(
+  Future<void> _prosesFirebase(
     String email,
     String password,
     bool daftar,
   ) async {
     final auth = FirebaseAuth.instance;
-    if (daftar) {
-      await auth.createUserWithEmailAndPassword(
+    final kredensial = daftar
+        ? await auth.createUserWithEmailAndPassword(
+            email: email,
+            password: password,
+          )
+        : await auth.signInWithEmailAndPassword(
+            email: email,
+            password: password,
+          );
+
+    // Modul 10: buat dokumen users/{uid} bila belum ada. Akun yang dibuat
+    // sebelum Minggu 10 mendapat dokumennya saat masuk berikutnya.
+    final user = kredensial.user;
+    if (user != null) {
+      await LayananFirestore().simpanPenggunaSaatLogin(
+        uid: user.uid,
         email: email,
-        password: password,
+        namaLengkap: daftar ? _namaController.text : null,
       );
-    } else {
-      await auth.signInWithEmailAndPassword(email: email, password: password);
     }
   }
 
@@ -74,6 +92,7 @@ class _MasukScreenState extends State<MasukScreen> {
     setState(() {
       _modeDaftar = !_modeDaftar;
       _pesanKesalahan = null;
+      _namaController.clear();
       _ulangiController.clear();
     });
     _formKey.currentState?.reset();
@@ -94,6 +113,13 @@ class _MasukScreenState extends State<MasukScreen> {
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       setState(() => _pesanKesalahan = pesanKesalahanAuth(e.code));
+    } on FirebaseException {
+      // Login berhasil, tetapi profil gagal ditulis ke Firestore.
+      if (!mounted) return;
+      setState(
+        () => _pesanKesalahan =
+            'Profil gagal disimpan. Periksa koneksi lalu masuk kembali.',
+      );
     } finally {
       if (mounted) setState(() => _sedangProses = false);
     }
@@ -138,6 +164,21 @@ class _MasukScreenState extends State<MasukScreen> {
                     const SizedBox(height: AppTheme.spacing16),
                     if (_pesanKesalahan != null) ...[
                       _KotakKesalahan(_pesanKesalahan!),
+                      const SizedBox(height: AppTheme.spacing16),
+                    ],
+                    if (_modeDaftar) ...[
+                      const _Label('Nama Lengkap *'),
+                      TextFormField(
+                        key: const Key('kolom-nama-lengkap'),
+                        controller: _namaController,
+                        textInputAction: TextInputAction.next,
+                        textCapitalization: TextCapitalization.words,
+                        autofillHints: const [AutofillHints.name],
+                        decoration: const InputDecoration(
+                          hintText: 'Nama pemilik katering',
+                        ),
+                        validator: validasiNamaLengkap,
+                      ),
                       const SizedBox(height: AppTheme.spacing16),
                     ],
                     const _Label('Email *'),

@@ -26,6 +26,15 @@ String? validasiPassword(String? nilai) {
   return null;
 }
 
+/// Kolom Nama lengkap (hanya pada mode Daftar, Modul 10).
+String? validasiNamaLengkap(String? nilai) {
+  final nama = nilai?.trim() ?? '';
+  if (nama.isEmpty) return 'Nama lengkap wajib diisi';
+  if (nama.length < 3) return 'Nama lengkap minimal 3 karakter';
+  if (nama.length > 60) return 'Nama lengkap maksimal 60 karakter';
+  return null;
+}
+
 /// Kolom Ulangi password (hanya pada mode Daftar).
 String? validasiUlangiPassword(String? nilai, String password) {
   final ulangi = nilai ?? '';

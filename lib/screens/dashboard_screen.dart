@@ -30,6 +30,9 @@ class DashboardScreen extends StatelessWidget {
   /// Jumlah pesanan terbaru yang ditampilkan agar Dashboard tetap ringkas.
   static const int _batasPesananTerbaru = 3;
 
+  /// Nama dari collection `users` untuk sapaan. Kosong/null: "Admin".
+  final String? namaAdmin;
+
   /// Callback ketika "Lihat semua" ditekan. Jika null, link disembunyikan.
   final VoidCallback? onLihatSemua;
 
@@ -44,6 +47,7 @@ class DashboardScreen extends StatelessWidget {
 
   const DashboardScreen({
     super.key,
+    this.namaAdmin,
     this.onLihatSemua,
     this.onPesananTap,
     this.onTambah,
@@ -56,12 +60,18 @@ class DashboardScreen extends StatelessWidget {
     final semuaPesanan = MockData.pesananList;
     final pesananTerbaru = semuaPesanan.take(_batasPesananTerbaru).toList();
     final tanggalHariIni = Format.tanggalPanjang(DateTime.now());
+    final nama = (namaAdmin ?? '').trim();
+    final sapaan = 'Halo, ${nama.isEmpty ? 'Admin' : nama}';
 
     final isi = <Widget>[
       if (lebar)
-        _KepalaLebar(tanggal: tanggalHariIni, onTambah: onTambah)
+        _KepalaLebar(
+          sapaan: sapaan,
+          tanggal: tanggalHariIni,
+          onTambah: onTambah,
+        )
       else
-        _SapaanPonsel(tanggal: tanggalHariIni),
+        _SapaanPonsel(sapaan: sapaan, tanggal: tanggalHariIni),
       const SizedBox(height: AppTheme.spacing16),
       if (semuaPesanan.isEmpty)
         const EmptyState(
@@ -139,16 +149,21 @@ class DashboardScreen extends StatelessWidget {
 
 /// Sapaan di bagian atas Dashboard ponsel.
 class _SapaanPonsel extends StatelessWidget {
+  final String sapaan;
   final String tanggal;
 
-  const _SapaanPonsel({required this.tanggal});
+  const _SapaanPonsel({required this.sapaan, required this.tanggal});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Halo, Admin', style: AppTheme.gayaSeksi),
+        Text(
+          sapaan,
+          key: const Key('sapaan-admin'),
+          style: AppTheme.gayaSeksi,
+        ),
         const SizedBox(height: 2),
         Text(
           tanggal,
@@ -164,10 +179,15 @@ class _SapaanPonsel extends StatelessWidget {
 
 /// Kepala halaman Dashboard pada layar lebar.
 class _KepalaLebar extends StatelessWidget {
+  final String sapaan;
   final String tanggal;
   final VoidCallback? onTambah;
 
-  const _KepalaLebar({required this.tanggal, this.onTambah});
+  const _KepalaLebar({
+    required this.sapaan,
+    required this.tanggal,
+    this.onTambah,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -187,7 +207,8 @@ class _KepalaLebar extends StatelessWidget {
                 ),
               ),
               Text(
-                'Halo, Admin · $tanggal',
+                '$sapaan · $tanggal',
+                key: const Key('sapaan-admin'),
                 style: const TextStyle(
                   fontSize: AppTheme.keterangan,
                   color: AppTheme.textSecondary,

@@ -16,6 +16,7 @@ import 'package:kelola_katering/main.dart';
 import 'package:kelola_katering/models/pesanan_model.dart';
 import 'package:kelola_katering/screens/daftar_pesanan_screen.dart';
 import 'package:kelola_katering/screens/dashboard_screen.dart';
+import 'package:kelola_katering/services/layanan_firestore.dart';
 
 void main() {
   late List<Pesanan> dataAwal;
@@ -44,7 +45,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
-      const KelolaKateringApp(halamanAwal: HomeShell()),
+      KelolaKateringApp(halamanAwal: HomeShell(layanan: LayananMemori())),
     );
     await tester.pumpAndSettle();
 
