@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../utils/theme.dart';
@@ -141,13 +142,22 @@ class Pesanan {
   /// ID unik pesanan (untuk navigasi dan identifikasi).
   final String id;
 
+  /// uid admin yang mencatat pesanan (field `id_pengguna` di Firestore).
+  final String idPengguna;
+
   /// Nama pelanggan yang memesan.
   final String namaPelanggan;
 
   /// Nomor HP pelanggan (opsional).
   final String nomorHP;
 
-  /// Menu atau paket katering yang dipesan.
+  /// ID dokumen menu di collection `menus` (field `id_menu`).
+  final String idMenu;
+
+  /// Nama menu atau paket katering yang dipesan.
+  ///
+  /// Disalin dari collection `menus` (denormalisasi) agar Daftar Pesanan
+  /// cukup membaca satu dokumen tanpa query tambahan.
   final String menu;
 
   /// Jumlah porsi yang dipesan.
@@ -168,10 +178,15 @@ class Pesanan {
   /// Status pembayaran pesanan.
   StatusPembayaran statusPembayaran;
 
+  /// Waktu pesanan dicatat (diisi server). Null untuk data simulasi.
+  final DateTime? dibuatPada;
+
   Pesanan({
     required this.id,
+    this.idPengguna = '',
     required this.namaPelanggan,
     this.nomorHP = '',
+    this.idMenu = '',
     required this.menu,
     required this.jumlahPorsi,
     required this.tanggalKirim,
@@ -179,13 +194,62 @@ class Pesanan {
     this.catatan = '',
     this.statusPesanan = StatusPesanan.baru,
     this.statusPembayaran = StatusPembayaran.belumBayar,
+    this.dibuatPada,
   });
+
+  /// Data yang ditulis ke collection `orders` (Modul 10).
+  ///
+  /// `dibuat_pada` tidak ada di sini karena diisi layanan memakai
+  /// FieldValue.serverTimestamp(). Status disimpan sebagai nama enum
+  /// (mis. `siapDikirim`) agar mudah dibaca di Firebase Console.
+  Map<String, dynamic> toMap() => {
+        'id_pesanan': id,
+        'id_pengguna': idPengguna,
+        'nama_pelanggan': namaPelanggan,
+        'nomor_hp': nomorHP,
+        'id_menu': idMenu,
+        'nama_menu': menu,
+        'jumlah_porsi': jumlahPorsi,
+        'tanggal_kirim': Timestamp.fromDate(tanggalKirim),
+        'total_harga': totalHarga,
+        'catatan': catatan,
+        'status_pesanan': statusPesanan.name,
+        'status_pembayaran': statusPembayaran.name,
+      };
+
+  /// Membuat [Pesanan] dari dokumen Firestore dengan Document ID [id].
+  factory Pesanan.fromMap(String id, Map<String, dynamic> data) {
+    return Pesanan(
+      id: id,
+      idPengguna: data['id_pengguna'] as String? ?? '',
+      namaPelanggan: data['nama_pelanggan'] as String? ?? '',
+      nomorHP: data['nomor_hp'] as String? ?? '',
+      idMenu: data['id_menu'] as String? ?? '',
+      menu: data['nama_menu'] as String? ?? '',
+      jumlahPorsi: (data['jumlah_porsi'] as num?)?.toInt() ?? 0,
+      tanggalKirim:
+          (data['tanggal_kirim'] as Timestamp?)?.toDate() ?? DateTime(2000),
+      totalHarga: (data['total_harga'] as num?)?.toInt() ?? 0,
+      catatan: data['catatan'] as String? ?? '',
+      statusPesanan: StatusPesanan.values.firstWhere(
+        (s) => s.name == data['status_pesanan'],
+        orElse: () => StatusPesanan.baru,
+      ),
+      statusPembayaran: StatusPembayaran.values.firstWhere(
+        (s) => s.name == data['status_pembayaran'],
+        orElse: () => StatusPembayaran.belumBayar,
+      ),
+      dibuatPada: (data['dibuat_pada'] as Timestamp?)?.toDate(),
+    );
+  }
 
   /// Membuat salinan pesanan dengan field yang dapat diubah.
   Pesanan copyWith({
     String? id,
+    String? idPengguna,
     String? namaPelanggan,
     String? nomorHP,
+    String? idMenu,
     String? menu,
     int? jumlahPorsi,
     DateTime? tanggalKirim,
@@ -193,11 +257,14 @@ class Pesanan {
     String? catatan,
     StatusPesanan? statusPesanan,
     StatusPembayaran? statusPembayaran,
+    DateTime? dibuatPada,
   }) {
     return Pesanan(
       id: id ?? this.id,
+      idPengguna: idPengguna ?? this.idPengguna,
       namaPelanggan: namaPelanggan ?? this.namaPelanggan,
       nomorHP: nomorHP ?? this.nomorHP,
+      idMenu: idMenu ?? this.idMenu,
       menu: menu ?? this.menu,
       jumlahPorsi: jumlahPorsi ?? this.jumlahPorsi,
       tanggalKirim: tanggalKirim ?? this.tanggalKirim,
@@ -205,6 +272,7 @@ class Pesanan {
       catatan: catatan ?? this.catatan,
       statusPesanan: statusPesanan ?? this.statusPesanan,
       statusPembayaran: statusPembayaran ?? this.statusPembayaran,
+      dibuatPada: dibuatPada ?? this.dibuatPada,
     );
   }
 
