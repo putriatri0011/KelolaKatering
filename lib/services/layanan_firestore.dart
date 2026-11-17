@@ -4,6 +4,37 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../data/menu_awal.dart';
 import '../models/menu_model.dart';
 import '../models/pengguna_model.dart';
+import '../models/pesanan_model.dart';
+
+/// Dilempar bila pesanan yang sama sudah tercatat (aturan bisnis Modul 10).
+class PesananGandaException implements Exception {
+  final String pesan;
+
+  const PesananGandaException(this.pesan);
+
+  @override
+  String toString() => pesan;
+}
+
+/// Aturan bisnis KelolaKatering: dua pesanan dianggap sama bila nama
+/// pelanggan, nama menu (keduanya tanpa membedakan huruf besar kecil), dan
+/// tanggal kirim sama. Mencegah satu pesanan WhatsApp tercatat dua kali.
+/// Nama menu yang dibandingkan karena menu boleh diketik bebas.
+bool adalahPesananGanda(Pesanan lama, Pesanan baru) {
+  String rapikan(String teks) => teks.trim().toLowerCase();
+  final a = lama.tanggalKirim;
+  final b = baru.tanggalKirim;
+  return rapikan(lama.namaPelanggan) == rapikan(baru.namaPelanggan) &&
+      rapikan(lama.menu) == rapikan(baru.menu) &&
+      a.year == b.year &&
+      a.month == b.month &&
+      a.day == b.day;
+}
+
+PesananGandaException _pesanGanda(Pesanan p) => PesananGandaException(
+      'Pesanan ${p.namaPelanggan} untuk ${p.menu} '
+      'pada tanggal itu sudah tercatat.',
+    );
 
 /// Kontrak layanan data KelolaKatering (Modul 10).
 ///
@@ -27,6 +58,11 @@ abstract class LayananKelolaKatering {
 
   /// Seluruh menu, diurutkan berdasarkan nama, secara real-time.
   Stream<List<Menu>> streamDaftarMenu();
+
+  /// Menyimpan pesanan baru ke collection `orders`.
+  ///
+  /// Melempar [PesananGandaException] bila pesanan yang sama sudah ada.
+  Future<void> tambahPesanan(Pesanan pesanan);
 }
 
 /// Layanan yang membaca dan menulis Cloud Firestore asli.
@@ -90,6 +126,32 @@ class LayananFirestore implements LayananKelolaKatering {
       return daftar;
     });
   }
+
+  @override
+  Future<void> tambahPesanan(Pesanan pesanan) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('Admin belum login.');
+    }
+
+    // Cukup satu .where() agar tidak memerlukan composite index; aturan
+    // pesanan ganda diperiksa di sisi Dart.
+    final milikAdmin = await _db
+        .collection('orders')
+        .where('id_pengguna', isEqualTo: user.uid)
+        .get();
+    final ganda = milikAdmin.docs.any(
+      (doc) => adalahPesananGanda(Pesanan.fromMap(doc.id, doc.data()), pesanan),
+    );
+    if (ganda) throw _pesanGanda(pesanan);
+
+    final docRef = _db.collection('orders').doc();
+    final data = pesanan.copyWith(id: docRef.id, idPengguna: user.uid).toMap();
+    await docRef.set({
+      ...data,
+      'dibuat_pada': FieldValue.serverTimestamp(),
+    });
+  }
 }
 
 /// Layanan tiruan di memori, khusus untuk widget test.
@@ -99,6 +161,9 @@ class LayananMemori implements LayananKelolaKatering {
 
   /// Isi collection `menus` tiruan.
   final List<Menu> menu = [];
+
+  /// Isi collection `orders` tiruan.
+  final List<Pesanan> pesanan = [];
 
   LayananMemori({this.pengguna});
 
@@ -129,5 +194,19 @@ class LayananMemori implements LayananKelolaKatering {
     final daftar = List<Menu>.of(menu)
       ..sort((a, b) => a.namaMenu.compareTo(b.namaMenu));
     return Stream.value(daftar);
+  }
+
+  @override
+  Future<void> tambahPesanan(Pesanan baru) async {
+    if (pesanan.any((lama) => adalahPesananGanda(lama, baru))) {
+      throw _pesanGanda(baru);
+    }
+    pesanan.add(
+      baru.copyWith(
+        id: 'uji-${pesanan.length + 1}',
+        idPengguna: pengguna?.idPengguna ?? 'uid-uji',
+        dibuatPada: DateTime.now(),
+      ),
+    );
   }
 }

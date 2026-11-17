@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/mock_data.dart';
+import '../models/menu_model.dart';
 import '../models/pesanan_model.dart';
+import '../services/layanan_firestore.dart';
 import '../utils/format.dart';
 import '../utils/theme.dart';
 
@@ -26,13 +30,27 @@ import '../utils/theme.dart';
 /// - Jumlah porsi 1 sampai 1000.
 /// - Catatan maksimal 200 karakter.
 ///
-/// Data valid disimpan ke [MockData] di memori, lalu halaman ditutup
-/// dengan hasil `true` agar pemanggil menggambar ulang tampilannya.
+/// Modul 10: menu diketik bebas, dengan saran dari collection `menus`
+/// (menu yang sudah ada dipakai ulang namanya dan ID-nya), dan pesanan baru
+/// disimpan ke collection `orders` lewat [layanan]. Pesanan yang sama
+/// (nama pelanggan, menu, dan tanggal kirim sama) ditolak dengan SnackBar
+/// tanpa menutup form. Mode edit masih menyimpan ke [MockData]; edit ke
+/// Firestore dikerjakan pada Minggu 11.
+///
+/// Setelah berhasil, halaman ditutup dengan hasil `true` agar pemanggil
+/// menggambar ulang tampilannya.
 class TambahPesananScreen extends StatefulWidget {
   /// Pesanan yang diedit. Null berarti mode tambah pesanan baru.
   final Pesanan? pesananAwal;
 
-  const TambahPesananScreen({super.key, this.pesananAwal});
+  /// Sumber daftar menu dan tempat menyimpan pesanan baru.
+  final LayananKelolaKatering layanan;
+
+  const TambahPesananScreen({
+    super.key,
+    this.pesananAwal,
+    required this.layanan,
+  });
 
   @override
   State<TambahPesananScreen> createState() => _TambahPesananScreenState();
@@ -45,7 +63,6 @@ class _TambahPesananScreenState extends State<TambahPesananScreen> {
   // ── Controller setiap kolom teks/angka ──────────────────────
   final _namaController = TextEditingController();
   final _nomorHPController = TextEditingController();
-  final _menuController = TextEditingController();
   final _porsiController = TextEditingController();
   final _hargaController = TextEditingController();
   final _catatanController = TextEditingController();
@@ -55,6 +72,15 @@ class _TambahPesananScreenState extends State<TambahPesananScreen> {
   DateTime? _tanggalKirim;
   StatusPesanan _statusPesanan = StatusPesanan.baru;
   StatusPembayaran _statusPembayaran = StatusPembayaran.belumBayar;
+
+  // ── Kolom Menu: ketik bebas dengan saran dari `menus` ─────────
+  final _menuController = TextEditingController();
+  final _menuFocus = FocusNode();
+  late final StreamSubscription<List<Menu>> _langgananMenu;
+  List<Menu> _daftarMenu = const [];
+
+  /// true selama menunggu Firestore; tombol simpan dinonaktifkan.
+  bool _sedangMenyimpan = false;
 
   // ── Batas nilai yang dipakai validator ──────────────────────
   static const int _maksPorsi = 1000;
@@ -67,6 +93,11 @@ class _TambahPesananScreenState extends State<TambahPesananScreen> {
   @override
   void initState() {
     super.initState();
+    // Saran menu hanya pelengkap: bila gagal dimuat, kolom tetap bisa diisi.
+    _langgananMenu = widget.layanan.streamDaftarMenu().listen(
+      (daftar) => _daftarMenu = daftar,
+      onError: (Object _) => _daftarMenu = const [],
+    );
     final awal = widget.pesananAwal;
     if (awal == null) return;
 
@@ -87,7 +118,9 @@ class _TambahPesananScreenState extends State<TambahPesananScreen> {
   void dispose() {
     _namaController.dispose();
     _nomorHPController.dispose();
+    _langgananMenu.cancel();
     _menuController.dispose();
+    _menuFocus.dispose();
     _porsiController.dispose();
     _hargaController.dispose();
     _catatanController.dispose();
@@ -130,8 +163,18 @@ class _TambahPesananScreenState extends State<TambahPesananScreen> {
     });
   }
 
+  /// Menu di collection `menus` yang namanya sama dengan [nama]
+  /// (tanpa membedakan huruf besar kecil), atau null bila menu baru.
+  Menu? _menuCocok(String nama) {
+    final kunci = nama.trim().toLowerCase();
+    for (final menu in _daftarMenu) {
+      if (menu.namaMenu.toLowerCase() == kunci) return menu;
+    }
+    return null;
+  }
+
   /// Memvalidasi seluruh kolom, lalu menyimpan pesanan bila valid.
-  void _kirim() {
+  Future<void> _kirim() async {
     FocusScope.of(context).unfocus();
 
     final messenger = ScaffoldMessenger.of(context);
@@ -147,13 +190,20 @@ class _TambahPesananScreenState extends State<TambahPesananScreen> {
       return;
     }
 
+    final namaMenu = _menuController.text.trim();
+    final menuCocok = _menuCocok(namaMenu);
+
     final teksHarga = _hargaController.text.trim();
 
     final pesanan = Pesanan(
-      id: widget.pesananAwal?.id ?? MockData.idBerikutnya(),
+      // Pesanan baru mendapat ID dokumen dari Firestore saat disimpan.
+      id: widget.pesananAwal?.id ?? '',
       namaPelanggan: _namaController.text.trim(),
       nomorHP: _nomorHPController.text.trim(),
-      menu: _menuController.text.trim(),
+      // Menu dari `menus`: simpan ID dan salin namanya (denormalisasi).
+      // Menu yang diketik sendiri: id_menu dibiarkan kosong.
+      idMenu: menuCocok?.idMenu ?? '',
+      menu: menuCocok?.namaMenu ?? namaMenu,
       jumlahPorsi: int.parse(_porsiController.text.trim()),
       tanggalKirim: _tanggalKirim!,
       totalHarga: teksHarga.isEmpty ? 0 : int.parse(teksHarga),
@@ -164,12 +214,29 @@ class _TambahPesananScreenState extends State<TambahPesananScreen> {
 
     if (_modeEdit) {
       MockData.perbarui(pesanan);
-    } else {
-      MockData.tambah(pesanan);
+      Navigator.pop(context, true);
+      return;
     }
 
-    // SnackBar berhasil ditampilkan oleh pemanggil setelah halaman ditutup.
-    Navigator.pop(context, true);
+    setState(() => _sedangMenyimpan = true);
+    try {
+      await widget.layanan.tambahPesanan(pesanan);
+      if (!mounted) return;
+      // SnackBar berhasil ditampilkan oleh pemanggil setelah halaman ditutup.
+      Navigator.pop(context, true);
+    } on PesananGandaException catch (e) {
+      // Form tidak ditutup agar admin dapat memeriksa isiannya.
+      messenger.showSnackBar(SnackBar(content: Text(e.pesan)));
+    } catch (_) {
+      // Isian tetap ada di form sehingga admin cukup menekan Simpan lagi.
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Pesanan gagal disimpan. Periksa koneksi lalu coba lagi.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sedangMenyimpan = false);
+    }
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -192,6 +259,7 @@ class _TambahPesananScreenState extends State<TambahPesananScreen> {
     }
     return null;
   }
+
 
   String? _validasiMenu(String? nilai) {
     final teks = nilai?.trim() ?? '';
@@ -256,6 +324,59 @@ class _TambahPesananScreenState extends State<TambahPesananScreen> {
       ),
       validator: (_) =>
           _tanggalKirim == null ? 'Tanggal pengiriman wajib diisi' : null,
+    );
+
+    final kolomMenu = RawAutocomplete<Menu>(
+      textEditingController: _menuController,
+      focusNode: _menuFocus,
+      displayStringForOption: (menu) => menu.namaMenu,
+      optionsBuilder: (nilai) {
+        final kata = nilai.text.trim().toLowerCase();
+        if (kata.isEmpty) return const Iterable<Menu>.empty();
+        return _daftarMenu
+            .where((menu) => menu.namaMenu.toLowerCase().contains(kata));
+      },
+      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+        return TextFormField(
+          key: const Key('kolom-menu'),
+          controller: controller,
+          focusNode: focusNode,
+          textInputAction: TextInputAction.next,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            hintText: 'Contoh: Nasi Box Ayam Bakar',
+            helperText: 'Ketik bebas, atau pilih dari saran menu.',
+          ),
+          validator: _validasiMenu,
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(AppTheme.sudutKartu),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxHeight: 220,
+                maxWidth: AppTheme.lebarKontenMaks,
+              ),
+              child: ListView(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                children: [
+                  for (final menu in options)
+                    ListTile(
+                      dense: true,
+                      title: Text(menu.namaMenu),
+                      onTap: () => onSelected(menu),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
 
     final pilihStatusPesanan = DropdownButtonFormField<StatusPesanan>(
@@ -335,15 +456,7 @@ class _TambahPesananScreenState extends State<TambahPesananScreen> {
                   ),
                   const SizedBox(height: AppTheme.spacing12),
                   const _Label('Menu / Paket Katering *'),
-                  TextFormField(
-                    controller: _menuController,
-                    textInputAction: TextInputAction.next,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(
-                      hintText: 'Contoh: Nasi Box Ayam Bakar',
-                    ),
-                    validator: _validasiMenu,
-                  ),
+                  kolomMenu,
                   const SizedBox(height: AppTheme.spacing12),
                   _DuaKolom(
                     kiri: kolomPorsi,
@@ -409,9 +522,13 @@ class _TambahPesananScreenState extends State<TambahPesananScreen> {
                       const SizedBox(width: AppTheme.spacing8),
                       Expanded(
                         child: FilledButton(
-                          onPressed: _kirim,
+                          onPressed: _sedangMenyimpan ? null : _kirim,
                           child: Text(
-                            _modeEdit ? 'Simpan Perubahan' : 'Simpan Pesanan',
+                            _sedangMenyimpan
+                                ? 'Menyimpan...'
+                                : _modeEdit
+                                    ? 'Simpan Perubahan'
+                                    : 'Simpan Pesanan',
                           ),
                         ),
                       ),

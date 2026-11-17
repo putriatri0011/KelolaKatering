@@ -1,4 +1,8 @@
-// Pengujian form Tambah Pesanan (Modul 7).
+// Pengujian form Tambah Pesanan (Modul 7, diperbarui Modul 10).
+//
+// Modul 10: menu diketik bebas dengan saran dari collection `menus`, dan
+// pesanan baru disimpan ke collection `orders`. Firebase tidak dihubungi; aplikasi diberi
+// [LayananMemori] sehingga isi `orders` dapat diperiksa langsung.
 //
 // Setiap pengujian memakai aplikasi utuh agar alur yang diuji sama
 // dengan alur nyata: Dashboard -> Tambah Pesanan -> Form -> Simpan.
@@ -14,12 +18,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kelola_katering/data/mock_data.dart';
 import 'package:kelola_katering/main.dart';
 import 'package:kelola_katering/models/pesanan_model.dart';
-import 'package:kelola_katering/screens/daftar_pesanan_screen.dart';
-import 'package:kelola_katering/screens/dashboard_screen.dart';
 import 'package:kelola_katering/services/layanan_firestore.dart';
 
 void main() {
   late List<Pesanan> dataAwal;
+  late LayananMemori layanan;
 
   setUp(() {
     dataAwal = List<Pesanan>.from(MockData.pesananList);
@@ -44,8 +47,9 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
+    layanan = LayananMemori();
     await tester.pumpWidget(
-      KelolaKateringApp(halamanAwal: HomeShell(layanan: LayananMemori())),
+      KelolaKateringApp(halamanAwal: HomeShell(layanan: layanan)),
     );
     await tester.pumpAndSettle();
 
@@ -74,7 +78,7 @@ void main() {
   Future<void> isiFormValid(
     WidgetTester tester, {
     String nama = 'Ibu Rina Kartika',
-    String menu = 'Nasi Box Ayam Bakar',
+    String menu = 'Nasi Box Ayam Geprek',
     String porsi = '25',
     String harga = '875000',
   }) async {
@@ -149,7 +153,7 @@ void main() {
     expect(MockData.pesananList.length, dataAwal.length);
   });
 
-  testWidgets('5. Data valid tersimpan ke list memori', (tester) async {
+  testWidgets('5. Data valid tersimpan ke collection orders', (tester) async {
     await bukaForm(tester);
     await isiFormValid(tester);
     await tekan(tester, find.text('Simpan Pesanan'));
@@ -157,47 +161,80 @@ void main() {
     // Kembali ke Dashboard dan pesan berhasil tampil.
     expect(find.text('Pesanan baru berhasil disimpan.'), findsOneWidget);
 
-    expect(MockData.pesananList.length, dataAwal.length + 1);
-
-    final pesananBaru = MockData.pesananList.first;
-    expect(pesananBaru.id, 'PSN-006');
+    expect(layanan.pesanan.length, 1);
+    final pesananBaru = layanan.pesanan.single;
     expect(pesananBaru.namaPelanggan, 'Ibu Rina Kartika');
-    expect(pesananBaru.menu, 'Nasi Box Ayam Bakar');
+    // Nama sama dengan menu di `menus`: ID ikut tersimpan.
+    expect(pesananBaru.idMenu, 'menu-ayam-geprek');
+    expect(pesananBaru.menu, 'Nasi Box Ayam Geprek'); // denormalisasi
     expect(pesananBaru.jumlahPorsi, 25);
     expect(pesananBaru.totalHarga, 875000);
+    expect(pesananBaru.idPengguna, isNotEmpty);
     expect(pesananBaru.statusPesanan, StatusPesanan.baru);
     expect(pesananBaru.statusPembayaran, StatusPembayaran.belumBayar);
   });
 
-  testWidgets('6. Pesanan baru tampil di Dashboard dan Daftar Pesanan', (
+  testWidgets('6. Pesanan ganda ditolak dan form tetap terbuka', (
     tester,
   ) async {
     await bukaForm(tester);
-    await isiFormValid(tester, nama: 'Ibu Rina Kartika');
+    await isiFormValid(tester);
+    await tekan(tester, find.text('Simpan Pesanan'));
+    expect(layanan.pesanan.length, 1);
+
+    // Catat ulang pesanan yang sama: pelanggan, menu, dan tanggal sama.
+    // Huruf besar kecil nama pelanggan tidak dibedakan.
+    await tester.tap(find.byKey(const Key('tambah-dashboard')));
+    await tester.pumpAndSettle();
+    await isiFormValid(tester, nama: 'ibu rina kartika');
     await tekan(tester, find.text('Simpan Pesanan'));
 
-    // Dashboard menampilkan pesanan terbaru di urutan pertama.
-    // Pencarian dibatasi per halaman karena IndexedStack membangun
-    // kedua halaman sekaligus.
-    expect(
-      find.descendant(
-        of: find.byType(DashboardScreen),
-        matching: find.text('Ibu Rina Kartika'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.textContaining('sudah tercatat'), findsOneWidget);
+    expect(find.text('Form Tambah Pesanan'), findsOneWidget);
+    expect(layanan.pesanan.length, 1);
+  });
 
-    // Pindah ke menu Daftar Pesanan (sidebar, karena layar uji lebar).
-    await tester.tap(find.byKey(const Key('nav-daftar-pesanan')));
+  testWidgets('7. Menu lain untuk pelanggan yang sama tetap boleh', (
+    tester,
+  ) async {
+    await bukaForm(tester);
+    await isiFormValid(tester);
+    await tekan(tester, find.text('Simpan Pesanan'));
+
+    await tester.tap(find.byKey(const Key('tambah-dashboard')));
+    await tester.pumpAndSettle();
+    await isiFormValid(tester, menu: 'Snack Box Mix');
+    await tekan(tester, find.text('Simpan Pesanan'));
+
+    expect(find.text('Pesanan baru berhasil disimpan.'), findsOneWidget);
+    expect(layanan.pesanan.length, 2);
+  });
+
+  testWidgets('8. Menu yang diketik sendiri tetap tersimpan', (tester) async {
+    await bukaForm(tester);
+    await isiFormValid(tester, menu: 'Nasi Liwet Komplit');
+    await tekan(tester, find.text('Simpan Pesanan'));
+
+    expect(find.text('Pesanan baru berhasil disimpan.'), findsOneWidget);
+    final pesananBaru = layanan.pesanan.single;
+    expect(pesananBaru.menu, 'Nasi Liwet Komplit');
+    expect(pesananBaru.idMenu, isEmpty); // tidak ada di collection menus
+  });
+
+  testWidgets('9. Saran menu muncul saat mengetik dan dapat dipilih', (
+    tester,
+  ) async {
+    await bukaForm(tester);
+    final kolomMenu = find.byKey(const Key('kolom-menu'));
+    await tester.enterText(kolomMenu, 'snack');
     await tester.pumpAndSettle();
 
-    expect(find.text('Daftar Pesanan'), findsWidgets);
-    expect(
-      find.descendant(
-        of: find.byType(DaftarPesananScreen),
-        matching: find.text('Ibu Rina Kartika'),
-      ),
-      findsOneWidget,
-    );
+    final saran = find.widgetWithText(ListTile, 'Snack Box Mix');
+    expect(saran, findsOneWidget);
+    await tester.tap(saran);
+    await tester.pumpAndSettle();
+
+    final kolom = tester.widget<TextFormField>(kolomMenu);
+    expect(kolom.controller!.text, 'Snack Box Mix');
   });
 }

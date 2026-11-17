@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/mock_data.dart';
 import '../models/pesanan_model.dart';
+import '../services/layanan_firestore.dart';
 import '../utils/format.dart';
 import '../utils/theme.dart';
 import 'tambah_pesanan_screen.dart';
@@ -30,7 +31,14 @@ class DetailPesananScreen extends StatefulWidget {
   /// Pesanan yang ditampilkan saat halaman dibuka.
   final Pesanan pesanan;
 
-  const DetailPesananScreen({super.key, required this.pesanan});
+  /// Diteruskan ke Form Edit Pesanan untuk memuat daftar menu.
+  final LayananKelolaKatering layanan;
+
+  const DetailPesananScreen({
+    super.key,
+    required this.pesanan,
+    required this.layanan,
+  });
 
   @override
   State<DetailPesananScreen> createState() => _DetailPesananScreenState();
@@ -64,7 +72,10 @@ class _DetailPesananScreenState extends State<DetailPesananScreen> {
     final berhasil = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (context) => TambahPesananScreen(pesananAwal: _pesanan),
+        builder: (context) => TambahPesananScreen(
+          pesananAwal: _pesanan,
+          layanan: widget.layanan,
+        ),
       ),
     );
     if (!mounted || berhasil != true) return;

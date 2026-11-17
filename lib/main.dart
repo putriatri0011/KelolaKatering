@@ -105,7 +105,8 @@ class _HomeShellState extends State<HomeShell> {
     final hasil = await Navigator.push<HasilDetail>(
       context,
       MaterialPageRoute(
-        builder: (context) => DetailPesananScreen(pesanan: pesanan),
+        builder: (context) =>
+            DetailPesananScreen(pesanan: pesanan, layanan: _layanan),
       ),
     );
     if (!mounted) return;
@@ -123,7 +124,9 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> _bukaFormTambah() async {
     final berhasil = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (context) => const TambahPesananScreen()),
+      MaterialPageRoute(
+        builder: (context) => TambahPesananScreen(layanan: _layanan),
+      ),
     );
 
     // Halaman bisa saja sudah ditutup saat form masih terbuka.
