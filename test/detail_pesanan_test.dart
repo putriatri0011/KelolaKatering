@@ -1,12 +1,14 @@
-// Pengujian Detail Pesanan dan Daftar Pesanan pada layar ponsel.
+// Pengujian tampilan pesanan dari collection `orders` (Modul 10).
 //
-// Mencakup kebutuhan Must Modul 2 yang ditambahkan setelah Modul 7:
-// - K6/K7: mengubah status pesanan dan status pembayaran;
-// - K5: mengubah (edit) dan menghapus pesanan;
-// - pencarian pesanan berdasarkan nama pelanggan (wireframe Figma).
+// Firebase tidak dihubungi: aplikasi diberi [LayananMemori] yang meniru
+// query `where('id_pengguna', isEqualTo: uid)` dan pengurutan terbaru.
+// Lima pesanan simulasi dari MockData dipakai sebagai isi `orders`.
+//
+// Ubah status, edit, dan hapus pesanan dikerjakan pada Minggu 11, sehingga
+// pengujiannya ditambahkan kembali saat itu.
 //
 // Layar uji 400 x 900 agar tata letak ponsel (NavigationBar bawah) yang
-// diuji. Data MockData dikembalikan ke kondisi awal setelah tiap test.
+// diuji.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,28 +20,35 @@ import 'package:kelola_katering/screens/daftar_pesanan_screen.dart';
 import 'package:kelola_katering/screens/dashboard_screen.dart';
 import 'package:kelola_katering/services/layanan_firestore.dart';
 
+/// Layanan yang selalu gagal membaca `orders`, mis. karena Rules menolak.
+class _LayananGagal extends LayananMemori {
+  @override
+  Stream<List<Pesanan>> streamPesananSaya() =>
+      Stream.error(Exception('permission-denied'));
+}
+
 void main() {
-  late List<Pesanan> dataAwal;
-
-  setUp(() {
-    dataAwal = List<Pesanan>.from(MockData.pesananList);
-  });
-
-  tearDown(() {
-    MockData.pesananList
-      ..clear()
-      ..addAll(dataAwal);
-  });
+  /// Lima pesanan simulasi milik akun uji; PSN-001 paling baru dicatat.
+  List<Pesanan> pesananSimulasi({String uid = 'uid-uji'}) => [
+        for (var i = 0; i < MockData.pesananList.length; i++)
+          MockData.pesananList[i].copyWith(
+            idPengguna: uid,
+            dibuatPada: DateTime(2026, 11, 1).subtract(Duration(minutes: i)),
+          ),
+      ];
 
   // ── Helper ────────────────────────────────────────────────────
 
-  Future<void> bukaAplikasiPonsel(WidgetTester tester) async {
+  Future<void> bukaAplikasiPonsel(
+    WidgetTester tester,
+    LayananMemori layanan,
+  ) async {
     tester.view.physicalSize = const Size(400, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
-      KelolaKateringApp(halamanAwal: HomeShell(layanan: LayananMemori())),
+      KelolaKateringApp(halamanAwal: HomeShell(layanan: layanan)),
     );
     await tester.pumpAndSettle();
   }
@@ -51,130 +60,104 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  /// Membuka Detail Pesanan PSN-001 (Ibu Siti Rahayu) dari Dashboard.
-  Future<void> bukaDetailSiti(WidgetTester tester) async {
-    await bukaAplikasiPonsel(tester);
-    await tekan(
-      tester,
-      find.descendant(
+  Finder diDashboard(String teks) => find.descendant(
         of: find.byType(DashboardScreen),
-        matching: find.text('Ibu Siti Rahayu'),
-      ),
-    );
-    expect(find.text('Detail Pesanan'), findsOneWidget);
-  }
+        matching: find.text(teks),
+      );
+
+  Finder diDaftar(String teks) => find.descendant(
+        of: find.byType(DaftarPesananScreen),
+        matching: find.text(teks),
+      );
 
   // ── Kasus uji ─────────────────────────────────────────────────
 
-  testWidgets('7. Status pesanan dapat diubah dari Detail Pesanan', (
+  testWidgets('Dashboard menampilkan pesanan dari orders, terbaru di atas', (
     tester,
   ) async {
-    await bukaDetailSiti(tester);
-
-    await tekan(tester, find.byKey(const Key('chip-pesanan-diproses')));
-
-    expect(
-      MockData.cariById('PSN-001')!.statusPesanan,
-      StatusPesanan.diproses,
-    );
-    expect(
-      find.text('Status pesanan diubah menjadi Diproses.'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('8. Status pembayaran berubah dan Dashboard ikut diperbarui', (
-    tester,
-  ) async {
-    await bukaDetailSiti(tester);
-
-    await tekan(tester, find.byKey(const Key('chip-bayar-lunas')));
-    expect(
-      MockData.cariById('PSN-001')!.statusPembayaran,
-      StatusPembayaran.lunas,
+    await bukaAplikasiPonsel(
+      tester,
+      LayananMemori(pesananAwal: pesananSimulasi()),
     );
 
-    // Kembali ke Dashboard: jumlah Lunas di Ringkasan Pembayaran
-    // bertambah dari 2 menjadi 3.
-    await tester.pageBack();
+    // Tiga pesanan terbaru: PSN-001, PSN-002, PSN-003. Kartu ketiga berada
+    // di bawah layar ponsel, sehingga Dashboard digulir lebih dulu.
+    await tester.scrollUntilVisible(
+      diDashboard('Catering Wulandari'),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(DashboardScreen),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.pumpAndSettle();
 
-    final jumlahLunas = tester.widget<Text>(
-      find.byKey(const ValueKey('jumlah-bayar-lunas')),
-    );
-    expect(jumlahLunas.data, '3');
+    expect(diDashboard('Ibu Siti Rahayu'), findsOneWidget);
+    expect(diDashboard('Pak Budi Santoso'), findsOneWidget);
+    expect(diDashboard('Catering Wulandari'), findsOneWidget);
+    expect(diDashboard('Toko Berkah Jaya'), findsNothing);
+
+    // Urutan: yang paling baru dicatat berada paling atas.
+    final ySiti = tester.getTopLeft(diDashboard('Ibu Siti Rahayu')).dy;
+    final yBudi = tester.getTopLeft(diDashboard('Pak Budi Santoso')).dy;
+    final yWulan = tester.getTopLeft(diDashboard('Catering Wulandari')).dy;
+    expect(ySiti < yBudi && yBudi < yWulan, isTrue);
   });
 
-  testWidgets('9. Pesanan dapat diedit tanpa mengubah ID', (tester) async {
-    await bukaDetailSiti(tester);
-
-    await tekan(tester, find.text('Edit Pesanan'));
-    expect(find.text('Form Edit Pesanan'), findsOneWidget);
-
-    // Kolom sudah terisi data lama.
-    final kolomNama = tester.widget<TextFormField>(
-      find.byType(TextFormField).at(0),
+  testWidgets('Detail Pesanan hanya menampilkan data (Minggu 10)', (
+    tester,
+  ) async {
+    await bukaAplikasiPonsel(
+      tester,
+      LayananMemori(pesananAwal: pesananSimulasi()),
     );
-    expect(kolomNama.controller!.text, 'Ibu Siti Rahayu');
+    await tekan(tester, diDashboard('Ibu Siti Rahayu'));
 
-    await tester.enterText(
-      find.byType(TextFormField).at(0),
-      'Ibu Siti Rahayu Putri',
-    );
-    await tester.enterText(find.byType(TextFormField).at(3), '60');
-    await tekan(tester, find.text('Simpan Perubahan'));
-
-    // Kembali ke Detail Pesanan dengan data terbaru.
     expect(find.text('Detail Pesanan'), findsOneWidget);
-    expect(find.text('Ibu Siti Rahayu Putri'), findsOneWidget);
-    expect(find.text('60 porsi'), findsOneWidget);
-
-    final hasil = MockData.cariById('PSN-001')!;
-    expect(hasil.namaPelanggan, 'Ibu Siti Rahayu Putri');
-    expect(hasil.jumlahPorsi, 60);
-    expect(MockData.pesananList.length, dataAwal.length);
+    expect(find.text('Nasi Box Ayam Geprek'), findsOneWidget);
+    expect(find.text('50 porsi'), findsOneWidget);
+    expect(find.byKey(const Key('info-minggu-11')), findsOneWidget);
+    expect(find.text('Edit Pesanan'), findsNothing);
+    expect(find.text('Hapus Pesanan'), findsNothing);
   });
 
-  testWidgets('10. Pesanan dapat dihapus setelah konfirmasi', (tester) async {
-    await bukaDetailSiti(tester);
-
-    await tekan(tester, find.text('Hapus Pesanan'));
-    expect(find.text('Hapus pesanan ini?'), findsOneWidget);
-
-    await tekan(tester, find.byKey(const Key('konfirmasi-hapus')));
-
-    expect(MockData.cariById('PSN-001'), isNull);
-    expect(MockData.pesananList.length, dataAwal.length - 1);
-    expect(find.text('Pesanan dihapus.'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byType(DashboardScreen),
-        matching: find.text('Ibu Siti Rahayu'),
-      ),
-      findsNothing,
+  testWidgets('Pesanan akun lain tidak ikut tampil (isolasi per akun)', (
+    tester,
+  ) async {
+    await bukaAplikasiPonsel(
+      tester,
+      LayananMemori(pesananAwal: pesananSimulasi(uid: 'uid-akun-lain')),
     );
+
+    expect(diDashboard('Belum ada pesanan'), findsOneWidget);
+    expect(diDashboard('Ibu Siti Rahayu'), findsNothing);
   });
 
-  testWidgets('11. Batal hapus tidak menghapus pesanan', (tester) async {
-    await bukaDetailSiti(tester);
+  testWidgets('Belum ada pesanan: keadaan kosong tampil', (tester) async {
+    await bukaAplikasiPonsel(tester, LayananMemori());
+    await tekan(tester, find.byKey(const Key('nav-daftar-pesanan')));
 
-    await tekan(tester, find.text('Hapus Pesanan'));
-    await tekan(tester, find.text('Batal'));
+    expect(diDaftar('Belum ada pesanan'), findsOneWidget);
+  });
 
-    expect(MockData.cariById('PSN-001'), isNotNull);
-    expect(find.text('Detail Pesanan'), findsOneWidget);
+  testWidgets('Firestore gagal: pesan gagal dimuat tampil, bukan error', (
+    tester,
+  ) async {
+    await bukaAplikasiPonsel(tester, _LayananGagal());
+
+    expect(diDashboard('Data pesanan gagal dimuat'), findsOneWidget);
   });
 
   testWidgets('12. Pencarian menyaring Daftar Pesanan berdasarkan nama', (
     tester,
   ) async {
-    await bukaAplikasiPonsel(tester);
+    await bukaAplikasiPonsel(
+      tester,
+      LayananMemori(pesananAwal: pesananSimulasi()),
+    );
     await tekan(tester, find.byKey(const Key('nav-daftar-pesanan')));
-
-    Finder diDaftar(String teks) => find.descendant(
-          of: find.byType(DaftarPesananScreen),
-          matching: find.text(teks),
-        );
 
     await tester.enterText(find.byKey(const Key('cari-pesanan')), 'budi');
     await tester.pumpAndSettle();

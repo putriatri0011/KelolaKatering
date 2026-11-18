@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../data/mock_data.dart';
 import '../models/pesanan_model.dart';
 import '../utils/theme.dart';
 import '../widgets/empty_state.dart';
@@ -10,8 +9,9 @@ import '../widgets/tombol_tambah_pesanan.dart';
 
 /// Halaman Daftar Pesanan KelolaKatering.
 ///
-/// Menampilkan seluruh pesanan dari [MockData.pesananList] dengan
-/// kolom "Cari nama pelanggan" di atasnya, sesuai wireframe Figma.
+/// Menampilkan seluruh pesanan dari collection `orders` ([daftarPesanan],
+/// dikirim HomeShell lewat StreamBuilder) dengan kolom "Cari nama
+/// pelanggan" di atasnya, sesuai wireframe Figma.
 /// - Ponsel: daftar [PesananCard] dan tombol "Tambah Pesanan" di bawah.
 /// - Layar lebar: tabel pesanan dan tombol "Tambah Pesanan" di kanan atas.
 ///
@@ -19,6 +19,15 @@ import '../widgets/tombol_tambah_pesanan.dart';
 /// Keadaan kosong dibedakan menjadi dua: belum ada pesanan sama sekali,
 /// dan pencarian tidak menemukan pesanan.
 class DaftarPesananScreen extends StatefulWidget {
+  /// Pesanan milik admin yang login, terbaru di atas.
+  final List<Pesanan> daftarPesanan;
+
+  /// true selama data pertama dari Firestore belum diterima.
+  final bool memuat;
+
+  /// true bila Firestore mengembalikan kesalahan (koneksi atau Rules).
+  final bool gagal;
+
   /// Callback ketika sebuah pesanan ditekan.
   final void Function(Pesanan pesanan)? onPesananTap;
 
@@ -27,6 +36,9 @@ class DaftarPesananScreen extends StatefulWidget {
 
   const DaftarPesananScreen({
     super.key,
+    this.daftarPesanan = const [],
+    this.memuat = false,
+    this.gagal = false,
     this.onPesananTap,
     this.onTambah,
   });
@@ -47,8 +59,11 @@ class _DaftarPesananScreenState extends State<DaftarPesananScreen> {
   @override
   Widget build(BuildContext context) {
     final lebar = AppTheme.layarLebar(context);
-    final adaPesanan = MockData.pesananList.isNotEmpty;
-    final hasil = MockData.cariNama(_cariController.text);
+    final adaPesanan = widget.daftarPesanan.isNotEmpty;
+    final kunci = _cariController.text.trim().toLowerCase();
+    final hasil = widget.daftarPesanan
+        .where((p) => p.namaPelanggan.toLowerCase().contains(kunci))
+        .toList();
 
     final kolomCari = TextField(
       key: const Key('cari-pesanan'),
@@ -69,7 +84,18 @@ class _DaftarPesananScreenState extends State<DaftarPesananScreen> {
     );
 
     Widget isi;
-    if (!adaPesanan) {
+    if (widget.gagal) {
+      isi = const EmptyState(
+        icon: Icons.cloud_off,
+        title: 'Data pesanan gagal dimuat',
+        subtitle: 'Periksa koneksi internet, lalu muat ulang halaman.',
+      );
+    } else if (widget.memuat) {
+      isi = const Padding(
+        padding: EdgeInsets.all(AppTheme.spacing24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    } else if (!adaPesanan) {
       isi = const EmptyState(
         icon: Icons.receipt_long_outlined,
         title: 'Belum ada pesanan',

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -29,6 +31,19 @@ bool adalahPesananGanda(Pesanan lama, Pesanan baru) {
       a.year == b.year &&
       a.month == b.month &&
       a.day == b.day;
+}
+
+/// Mengurutkan pesanan dari yang terbaru dicatat (`dibuat_pada`).
+///
+/// Pengurutan dilakukan di sisi Dart agar query Firestore cukup memakai
+/// satu .where() tanpa composite index. Dokumen yang baru saja ditulis
+/// belum punya waktu server, sehingga dianggap paling baru.
+List<Pesanan> urutkanTerbaru(Iterable<Pesanan> pesanan) {
+  final sekarang = DateTime.now();
+  return pesanan.toList()
+    ..sort(
+      (a, b) => (b.dibuatPada ?? sekarang).compareTo(a.dibuatPada ?? sekarang),
+    );
 }
 
 PesananGandaException _pesanGanda(Pesanan p) => PesananGandaException(
@@ -63,6 +78,9 @@ abstract class LayananKelolaKatering {
   ///
   /// Melempar [PesananGandaException] bila pesanan yang sama sudah ada.
   Future<void> tambahPesanan(Pesanan pesanan);
+
+  /// Pesanan milik admin yang login, terbaru di atas, secara real-time.
+  Stream<List<Pesanan>> streamPesananSaya();
 }
 
 /// Layanan yang membaca dan menulis Cloud Firestore asli.
@@ -152,6 +170,21 @@ class LayananFirestore implements LayananKelolaKatering {
       'dibuat_pada': FieldValue.serverTimestamp(),
     });
   }
+
+  @override
+  Stream<List<Pesanan>> streamPesananSaya() {
+    final user = _auth.currentUser;
+    if (user == null) return Stream.value(const []);
+    return _db
+        .collection('orders')
+        .where('id_pengguna', isEqualTo: user.uid)
+        .snapshots()
+        .map(
+          (snap) => urutkanTerbaru(
+            snap.docs.map((d) => Pesanan.fromMap(d.id, d.data())),
+          ),
+        );
+  }
 }
 
 /// Layanan tiruan di memori, khusus untuk widget test.
@@ -162,10 +195,18 @@ class LayananMemori implements LayananKelolaKatering {
   /// Isi collection `menus` tiruan.
   final List<Menu> menu = [];
 
-  /// Isi collection `orders` tiruan.
+  /// Isi collection `orders` tiruan (milik semua akun).
   final List<Pesanan> pesanan = [];
 
-  LayananMemori({this.pengguna});
+  /// Memberi kabar ke [streamPesananSaya] setiap kali `orders` berubah.
+  final _perubahan = StreamController<void>.broadcast();
+
+  LayananMemori({this.pengguna, List<Pesanan> pesananAwal = const []}) {
+    pesanan.addAll(pesananAwal);
+  }
+
+  /// uid akun yang dianggap sedang login.
+  String get _uid => pengguna?.idPengguna ?? 'uid-uji';
 
   @override
   Future<void> simpanPenggunaSaatLogin({
@@ -198,15 +239,28 @@ class LayananMemori implements LayananKelolaKatering {
 
   @override
   Future<void> tambahPesanan(Pesanan baru) async {
-    if (pesanan.any((lama) => adalahPesananGanda(lama, baru))) {
+    if (_milikSaya().any((lama) => adalahPesananGanda(lama, baru))) {
       throw _pesanGanda(baru);
     }
     pesanan.add(
       baru.copyWith(
         id: 'uji-${pesanan.length + 1}',
-        idPengguna: pengguna?.idPengguna ?? 'uid-uji',
+        idPengguna: _uid,
         dibuatPada: DateTime.now(),
       ),
     );
+    _perubahan.add(null);
+  }
+
+  /// Sama seperti Firestore: hanya pesanan dengan id_pengguna == uid.
+  List<Pesanan> _milikSaya() =>
+      urutkanTerbaru(pesanan.where((p) => p.idPengguna == _uid));
+
+  @override
+  Stream<List<Pesanan>> streamPesananSaya() async* {
+    yield _milikSaya();
+    await for (final _ in _perubahan.stream) {
+      yield _milikSaya();
+    }
   }
 }

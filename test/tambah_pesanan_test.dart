@@ -18,6 +18,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kelola_katering/data/mock_data.dart';
 import 'package:kelola_katering/main.dart';
 import 'package:kelola_katering/models/pesanan_model.dart';
+import 'package:kelola_katering/screens/daftar_pesanan_screen.dart';
+import 'package:kelola_katering/screens/dashboard_screen.dart';
 import 'package:kelola_katering/services/layanan_firestore.dart';
 
 void main() {
@@ -236,5 +238,33 @@ void main() {
 
     final kolom = tester.widget<TextFormField>(kolomMenu);
     expect(kolom.controller!.text, 'Snack Box Mix');
+  });
+
+  testWidgets('10. Pesanan baru langsung tampil di Dashboard dan Daftar', (
+    tester,
+  ) async {
+    await bukaForm(tester);
+    await isiFormValid(tester, nama: 'Ibu Rina Kartika');
+    await tekan(tester, find.text('Simpan Pesanan'));
+
+    // StreamBuilder menerima data baru tanpa setState di HomeShell.
+    expect(
+      find.descendant(
+        of: find.byType(DashboardScreen),
+        matching: find.text('Ibu Rina Kartika'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('nav-daftar-pesanan')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byType(DaftarPesananScreen),
+        matching: find.text('Ibu Rina Kartika'),
+      ),
+      findsOneWidget,
+    );
   });
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../data/mock_data.dart';
 import '../models/pesanan_model.dart';
 import '../utils/format.dart';
 import '../utils/theme.dart';
@@ -20,6 +19,10 @@ import '../widgets/tombol_tambah_pesanan.dart';
 /// - Layar lebar: judul halaman dengan tombol "Tambah Pesanan" di kanan
 ///   atas, lima kotak ringkasan sebaris, dan tabel Pesanan Terbaru.
 ///
+/// Modul 10: data berasal dari collection `orders` lewat [daftarPesanan]
+/// yang dikirim HomeShell (StreamBuilder), dengan keadaan [memuat] dan
+/// [gagal]. Angka ringkasan dihitung dari daftar tersebut.
+///
 /// Navigasi:
 /// - "Lihat semua" beralih ke tab Daftar Pesanan via [onLihatSemua].
 /// - Kartu atau baris pesanan membuka Detail Pesanan via [onPesananTap].
@@ -32,6 +35,15 @@ class DashboardScreen extends StatelessWidget {
 
   /// Nama dari collection `users` untuk sapaan. Kosong/null: "Admin".
   final String? namaAdmin;
+
+  /// Pesanan milik admin yang login, terbaru di atas.
+  final List<Pesanan> daftarPesanan;
+
+  /// true selama data pertama dari Firestore belum diterima.
+  final bool memuat;
+
+  /// true bila Firestore mengembalikan kesalahan (koneksi atau Rules).
+  final bool gagal;
 
   /// Callback ketika "Lihat semua" ditekan. Jika null, link disembunyikan.
   final VoidCallback? onLihatSemua;
@@ -48,6 +60,9 @@ class DashboardScreen extends StatelessWidget {
   const DashboardScreen({
     super.key,
     this.namaAdmin,
+    this.daftarPesanan = const [],
+    this.memuat = false,
+    this.gagal = false,
     this.onLihatSemua,
     this.onPesananTap,
     this.onTambah,
@@ -57,7 +72,7 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lebar = AppTheme.layarLebar(context);
-    final semuaPesanan = MockData.pesananList;
+    final semuaPesanan = daftarPesanan;
     final pesananTerbaru = semuaPesanan.take(_batasPesananTerbaru).toList();
     final tanggalHariIni = Format.tanggalPanjang(DateTime.now());
     final nama = (namaAdmin ?? '').trim();
@@ -73,17 +88,28 @@ class DashboardScreen extends StatelessWidget {
       else
         _SapaanPonsel(sapaan: sapaan, tanggal: tanggalHariIni),
       const SizedBox(height: AppTheme.spacing16),
-      if (semuaPesanan.isEmpty)
+      if (gagal)
+        const EmptyState(
+          icon: Icons.cloud_off,
+          title: 'Data pesanan gagal dimuat',
+          subtitle: 'Periksa koneksi internet, lalu muat ulang halaman.',
+        )
+      else if (memuat)
+        const Padding(
+          padding: EdgeInsets.all(AppTheme.spacing24),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (semuaPesanan.isEmpty)
         const EmptyState(
           icon: Icons.inbox_outlined,
           title: 'Belum ada pesanan',
           subtitle: 'Catat pesanan pertama dari WhatsApp pelanggan Anda.',
         )
       else ...[
-        // Sengaja tidak const: widget const tidak dibangun ulang saat
-        // HomeShell memanggil setState, sehingga angka tidak diperbarui.
-        // ignore: prefer_const_constructors
-        if (lebar) _RingkasanLebar() else _RingkasanPonsel(),
+        if (lebar)
+          _RingkasanLebar(daftar: semuaPesanan)
+        else
+          _RingkasanPonsel(daftar: semuaPesanan),
         const SizedBox(height: AppTheme.spacing24),
         Row(
           children: [
@@ -229,7 +255,9 @@ class _KepalaLebar extends StatelessWidget {
 
 /// Ringkasan ponsel: dua kotak status pesanan dan Ringkasan Pembayaran.
 class _RingkasanPonsel extends StatelessWidget {
-  const _RingkasanPonsel();
+  final List<Pesanan> daftar;
+
+  const _RingkasanPonsel({required this.daftar});
 
   @override
   Widget build(BuildContext context) {
@@ -240,21 +268,22 @@ class _RingkasanPonsel extends StatelessWidget {
             Expanded(
               child: SummaryCard(
                 title: 'Pesanan Baru',
-                value: MockData.jumlahBaru,
+                value: _jumlahStatus(daftar, StatusPesanan.baru),
               ),
             ),
             const SizedBox(width: AppTheme.spacing8),
             Expanded(
               child: SummaryCard(
                 title: 'Sedang Diproses',
-                value: MockData.jumlahDiproses,
+                value: _jumlahStatus(daftar, StatusPesanan.diproses),
               ),
             ),
           ],
         ),
         const SizedBox(height: AppTheme.spacing8),
-        // ignore: prefer_const_constructors
-        RingkasanPembayaranCard(jumlahUntuk: MockData.jumlahPembayaran),
+        RingkasanPembayaranCard(
+          jumlahUntuk: (status) => _jumlahBayar(daftar, status),
+        ),
       ],
     );
   }
@@ -262,17 +291,25 @@ class _RingkasanPonsel extends StatelessWidget {
 
 /// Ringkasan layar lebar: lima kotak sebaris (dua kolom bila sempit).
 class _RingkasanLebar extends StatelessWidget {
-  const _RingkasanLebar();
+  final List<Pesanan> daftar;
+
+  const _RingkasanLebar({required this.daftar});
 
   @override
   Widget build(BuildContext context) {
     final kotak = <SummaryCard>[
-      SummaryCard(title: 'Pesanan Baru', value: MockData.jumlahBaru),
-      SummaryCard(title: 'Sedang Diproses', value: MockData.jumlahDiproses),
+      SummaryCard(
+        title: 'Pesanan Baru',
+        value: _jumlahStatus(daftar, StatusPesanan.baru),
+      ),
+      SummaryCard(
+        title: 'Sedang Diproses',
+        value: _jumlahStatus(daftar, StatusPesanan.diproses),
+      ),
       for (final status in StatusPembayaran.values)
         SummaryCard(
           title: status.label,
-          value: MockData.jumlahPembayaran(status),
+          value: _jumlahBayar(daftar, status),
         ),
     ];
 
@@ -293,3 +330,11 @@ class _RingkasanLebar extends StatelessWidget {
     );
   }
 }
+
+/// Jumlah pesanan dengan status pesanan [status].
+int _jumlahStatus(List<Pesanan> daftar, StatusPesanan status) =>
+    daftar.where((p) => p.statusPesanan == status).length;
+
+/// Jumlah pesanan dengan status pembayaran [status].
+int _jumlahBayar(List<Pesanan> daftar, StatusPembayaran status) =>
+    daftar.where((p) => p.statusPembayaran == status).length;

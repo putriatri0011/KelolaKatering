@@ -57,7 +57,9 @@ class KelolaKateringApp extends StatelessWidget {
 /// state tiap tab (mis. kata pencarian) saat berpindah tab.
 ///
 /// Modul 10: saat dibuka, collection `menus` diisi bila masih kosong, dan
-/// Dashboard menyapa admin dengan nama dari collection `users`.
+/// Dashboard menyapa admin dengan nama dari collection `users`. Pesanan
+/// dibaca sekali dari collection `orders` (milik admin yang login) melalui
+/// StreamBuilder, lalu dibagikan ke Dashboard dan Daftar Pesanan.
 class HomeShell extends StatefulWidget {
   /// Layanan data. Null berarti memakai [LayananFirestore]; widget test
   /// memberi [LayananMemori] agar tidak menghubungi Firebase.
@@ -74,12 +76,14 @@ class _HomeShellState extends State<HomeShell> {
 
   late final LayananKelolaKatering _layanan;
   late final Stream<Pengguna?> _streamPengguna;
+  late final Stream<List<Pesanan>> _streamPesanan;
 
   @override
   void initState() {
     super.initState();
     _layanan = widget.layanan ?? LayananFirestore();
     _streamPengguna = _layanan.streamPenggunaAktif();
+    _streamPesanan = _layanan.streamPesananSaya();
     _siapkanMenu();
   }
 
@@ -99,28 +103,18 @@ class _HomeShellState extends State<HomeShell> {
   /// Keluar dari akun. [CekStatusLogin] lalu menampilkan Halaman Masuk.
   Future<void> _keluar() => FirebaseAuth.instance.signOut();
 
-  /// Membuka Detail Pesanan. Setelah kembali, halaman digambar ulang
-  /// karena status bisa saja diubah, pesanan diedit, atau dihapus.
-  Future<void> _bukaDetailPesanan(Pesanan pesanan) async {
-    final hasil = await Navigator.push<HasilDetail>(
+  /// Membuka Detail Pesanan (hanya lihat; ubah dan hapus pada Minggu 11).
+  void _bukaDetailPesanan(Pesanan pesanan) {
+    Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            DetailPesananScreen(pesanan: pesanan, layanan: _layanan),
+        builder: (context) => DetailPesananScreen(pesanan: pesanan),
       ),
     );
-    if (!mounted) return;
-    setState(() {});
-
-    if (hasil == HasilDetail.dihapus) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('Pesanan dihapus.')));
-    }
   }
 
-  /// Membuka Form Tambah Pesanan, lalu menggambar ulang halaman
-  /// ketika pengguna berhasil menyimpan pesanan baru.
+  /// Membuka Form Tambah Pesanan, lalu menampilkan pesan berhasil.
+  /// Daftar pesanan diperbarui sendiri oleh StreamBuilder.
   Future<void> _bukaFormTambah() async {
     final berhasil = await Navigator.push<bool>(
       context,
@@ -131,8 +125,6 @@ class _HomeShellState extends State<HomeShell> {
 
     // Halaman bisa saja sudah ditutup saat form masih terbuka.
     if (!mounted || berhasil != true) return;
-
-    setState(() {});
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -145,24 +137,42 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final lebar = AppTheme.layarLebar(context);
 
-    final halaman = IndexedStack(
-      index: _currentIndex,
-      children: [
-        StreamBuilder<Pengguna?>(
-          stream: _streamPengguna,
-          builder: (context, snapshot) => DashboardScreen(
-            namaAdmin: snapshot.data?.namaLengkap,
-            onLihatSemua: () => _pilihTab(1),
-            onPesananTap: _bukaDetailPesanan,
-            onTambah: _bukaFormTambah,
-            onKeluar: _keluar,
-          ),
-        ),
-        DaftarPesananScreen(
-          onPesananTap: _bukaDetailPesanan,
-          onTambah: _bukaFormTambah,
-        ),
-      ],
+    final halaman = StreamBuilder<List<Pesanan>>(
+      stream: _streamPesanan,
+      builder: (context, snapPesanan) {
+        // Tiga keadaan: memuat, gagal (koneksi/Rules), dan data siap.
+        final memuat =
+            snapPesanan.connectionState == ConnectionState.waiting &&
+                !snapPesanan.hasData;
+        final gagal = snapPesanan.hasError;
+        final daftar = snapPesanan.data ?? const <Pesanan>[];
+
+        return IndexedStack(
+          index: _currentIndex,
+          children: [
+            StreamBuilder<Pengguna?>(
+              stream: _streamPengguna,
+              builder: (context, snapshot) => DashboardScreen(
+                namaAdmin: snapshot.data?.namaLengkap,
+                daftarPesanan: daftar,
+                memuat: memuat,
+                gagal: gagal,
+                onLihatSemua: () => _pilihTab(1),
+                onPesananTap: _bukaDetailPesanan,
+                onTambah: _bukaFormTambah,
+                onKeluar: _keluar,
+              ),
+            ),
+            DaftarPesananScreen(
+              daftarPesanan: daftar,
+              memuat: memuat,
+              gagal: gagal,
+              onPesananTap: _bukaDetailPesanan,
+              onTambah: _bukaFormTambah,
+            ),
+          ],
+        );
+      },
     );
 
     if (lebar) {
