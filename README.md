@@ -27,13 +27,20 @@ Sistem Informasi, Universitas Stikubank.
 - Dashboard: jumlah pesanan baru dan yang sedang diproses, ringkasan
   pembayaran (Belum Bayar, DP, Lunas), dan tiga pesanan terbaru.
 - Daftar Pesanan: semua pesanan, bisa dicari berdasarkan nama pelanggan.
-- Detail Pesanan: data pelanggan dan pesanan. Status pesanan dan status
-  pembayaran diubah dengan menekan pilihan yang tersedia, dan langsung
-  tersimpan.
-- Form Tambah Pesanan dan Form Edit Pesanan: satu formulir untuk
-  mencatat pesanan baru atau mengubah pesanan lama, dengan validasi di
-  setiap kolom.
-- Hapus pesanan, dengan konfirmasi lebih dulu.
+- Masuk dan Daftar akun admin dengan Firebase Authentication. Saat
+  daftar, admin mengisi nama lengkap yang dipakai untuk sapaan di
+  Dashboard.
+- Detail Pesanan: data pelanggan, data pesanan, status pesanan, dan
+  status pembayaran.
+- Form Tambah Pesanan dengan validasi di setiap kolom. Menu diketik
+  bebas, dengan saran dari daftar menu yang tersimpan. Pesanan yang sama
+  (nama pelanggan, menu, dan tanggal kirim sama) ditolak.
+- Data pesanan tersimpan di Cloud Firestore, tampil real-time, dan tetap
+  ada setelah halaman dimuat ulang.
+- Ubah status, edit, dan hapus pesanan sedang disambungkan ke Firestore
+  (Minggu 11). Untuk sementara tombolnya disembunyikan dari Detail
+  Pesanan; screenshot Form Edit dan konfirmasi hapus di bawah berasal
+  dari versi sebelum Firestore.
 - Tampilan menyesuaikan lebar layar. Di ponsel menu ada di bawah dan
   pesanan tampil sebagai kartu. Di browser (lebar 600 px ke atas) menu
   pindah ke sidebar kiri dan pesanan tampil sebagai tabel.
@@ -112,17 +119,44 @@ Tanggal dipilih lewat `showDatePicker`. Tanggal yang sudah lewat tidak
 bisa dipilih, kecuali saat mengedit pesanan yang tanggalnya memang sudah
 lewat.
 
-## Penyimpanan data
+## Penyimpanan data (Cloud Firestore)
 
-Data masih berupa list di memori (`MockData.pesananList`) berisi lima
-pesanan simulasi. `MockData` menyediakan fungsi `tambah`, `perbarui`,
-`hapus`, `cariById`, dan `cariNama`. Setiap kali form atau Detail Pesanan
-ditutup, `HomeShell` memanggil `setState()` supaya Dashboard dan Daftar
-Pesanan menampilkan data terbaru.
+Mulai Minggu 10 data disimpan di Cloud Firestore (project Firebase
+`kelolakatering-2301550011`, paket Spark). Strukturnya mengikuti tiga
+collection:
 
-Karena hanya disimpan di memori, semua perubahan hilang saat aplikasi
-dijalankan ulang. Penyimpanan permanen dengan Cloud Firestore
-direncanakan setelah UTS.
+| Collection | Document ID | Field | Kegunaan |
+|---|---|---|---|
+| `users` | uid Firebase Auth | `id_pengguna`, `nama_lengkap`, `email`, `nomor_telepon`, `peran`, `dibuat_pada` | Profil admin, dibuat saat daftar atau masuk |
+| `menus` | kode menu, mis. `menu-ayam-geprek` | `id_menu`, `nama_menu`, `harga_per_porsi` | Daftar menu untuk saran di form, diisi otomatis sekali bila masih kosong |
+| `orders` | auto-ID | `id_pesanan`, `id_pengguna`, `nama_pelanggan`, `nomor_hp`, `id_menu`, `nama_menu`, `jumlah_porsi`, `tanggal_kirim`, `total_harga`, `catatan`, `status_pesanan`, `status_pembayaran`, `dibuat_pada` | Setiap pesanan yang dicatat admin |
+
+- `orders.id_pengguna` menunjuk ke `users`, dan `orders.id_menu` menunjuk
+  ke `menus`. `id_menu` kosong bila menu diketik sendiri dan belum ada di
+  `menus`.
+- `nama_menu` ikut disalin ke `orders` (denormalisasi) karena Firestore
+  tidak punya JOIN, sehingga daftar pesanan cukup dibaca dari satu
+  collection.
+- Daftar pesanan dibaca dengan
+  `.where('id_pengguna', isEqualTo: uid).snapshots()`, lalu diurutkan dari
+  yang terbaru di sisi Dart agar tidak memerlukan composite index.
+- Security Rules hanya mengizinkan pengguna yang sudah login:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
+Halaman tidak memanggil Firestore secara langsung, tetapi lewat
+`lib/services/layanan_firestore.dart`. Aplikasi memakai `LayananFirestore`,
+sedangkan widget test memakai `LayananMemori` sehingga test tidak
+membutuhkan internet.
 
 ## Teknologi
 
@@ -131,17 +165,25 @@ direncanakan setelah UTS.
   License)
 - Warna dan ukuran teks mengikuti mini style guide di Figma: warna
   primer #1F3A5F, ukuran teks 26, 18, 15, dan 13
-- Belum memakai Firebase dan belum memakai package tambahan dari pub.dev.
-  Format tanggal dan Rupiah dibuat sendiri di `lib/utils/format.dart`.
+- Firebase: `firebase_core` 5.1.0, `firebase_auth` 7.0.1, dan
+  `cloud_firestore` 7.1.0, paket Spark tanpa billing account.
+- Format tanggal dan Rupiah dibuat sendiri di `lib/utils/format.dart`.
 
 ## Struktur proyek
 
 ```
 lib/
   main.dart                          # KelolaKateringApp dan HomeShell (navigasi)
-  data/mock_data.dart                # Data simulasi dan fungsi pengelolanya
-  models/pesanan_model.dart          # Model Pesanan, enum status
+  firebase_options.dart              # Konfigurasi Firebase web
+  data/mock_data.dart                # Data simulasi (dipakai Form Edit, Minggu 11)
+  data/menu_awal.dart                # Lima menu awal untuk collection menus
+  models/pesanan_model.dart          # Model Pesanan, enum status, toMap/fromMap
+  models/pengguna_model.dart         # Model profil admin (users)
+  models/menu_model.dart             # Model menu (menus)
+  services/layanan_firestore.dart    # LayananFirestore dan LayananMemori
   screens/
+    cek_status_login.dart            # Halaman Masuk atau HomeShell sesuai login
+    masuk_screen.dart                # Masuk dan Daftar
     dashboard_screen.dart
     daftar_pesanan_screen.dart
     detail_pesanan_screen.dart
@@ -161,8 +203,9 @@ lib/
 assets/fonts/                        # Font Inter dan lisensinya
 test/
   widget_test.dart                   # Halaman awal
-  tambah_pesanan_test.dart           # Validasi dan penyimpanan form
-  detail_pesanan_test.dart           # Ubah status, edit, hapus, pencarian
+  masuk_test.dart                    # Masuk, Daftar, dan Nama lengkap
+  tambah_pesanan_test.dart           # Validasi form, simpan ke orders, pesanan ganda
+  detail_pesanan_test.dart           # Tampilan dari orders, isolasi akun, pencarian
 ```
 
 ## Menjalankan aplikasi
@@ -182,7 +225,9 @@ flutter analyze
 flutter test
 ```
 
-`flutter analyze` tidak menemukan masalah, dan 13 test lulus.
+`flutter analyze` tidak menemukan masalah, dan 30 test lulus.
+
+### Tabel uji form
 
 | No | Yang diuji | Hasil yang diharapkan |
 |----|------------|-----------------------|
@@ -190,15 +235,26 @@ flutter test
 | 2 | Jumlah porsi 0 | "Jumlah porsi tidak boleh nol" |
 | 3 | Jumlah porsi 5000 | "Jumlah porsi maksimal 1000 porsi" |
 | 4 | Nomor WhatsApp 0812 | Pesan format nomor salah |
-| 5 | Semua kolom benar | Tersimpan sebagai PSN-006 |
-| 6 | Pesanan baru | Tampil di Dashboard dan Daftar Pesanan |
-| 7 | Ubah status pesanan ke Diproses | Status berubah dan ada pesan konfirmasi |
-| 8 | Ubah status pembayaran ke Lunas | Jumlah Lunas di Dashboard menjadi 3 |
-| 9 | Edit nama dan jumlah porsi | Data berubah, ID tetap sama |
-| 10 | Hapus lalu pilih Hapus | Pesanan hilang dari daftar |
-| 11 | Hapus lalu pilih Batal | Pesanan tetap ada |
-| 12 | Cari "budi" lalu "zzz" | Hanya Pak Budi Santoso, lalu "Pesanan tidak ditemukan" |
-| 13 | Buka aplikasi | Dashboard tampil sebagai halaman awal |
+| 5 | Semua kolom benar | Tersimpan ke collection `orders` |
+| 6 | Pesanan yang sama dicatat ulang | Ditolak, form tetap terbuka |
+| 7 | Menu lain untuk pelanggan yang sama | Tetap tersimpan |
+| 8 | Menu diketik sendiri | Tersimpan dengan `id_menu` kosong |
+| 9 | Ketik "snack" di kolom Menu | Saran "Snack Box Mix" muncul dan dapat dipilih |
+| 10 | Pesanan baru | Langsung tampil di Dashboard dan Daftar Pesanan |
+| 11 | Cari "budi" lalu "zzz" | Hanya Pak Budi Santoso, lalu "Pesanan tidak ditemukan" |
+| 12 | Buka aplikasi | Dashboard tampil sebagai halaman awal |
+
+### Tabel uji Cloud Firestore (Minggu 10)
+
+Diuji di Chrome dan Firebase Console pada 17–18 November 2026.
+
+| No | Kasus uji | Langkah | Hasil yang diharapkan | Hasil nyata |
+|----|-----------|---------|-----------------------|-------------|
+| 1 | Tambah data valid | Kirim Form Tambah Pesanan dengan isian lengkap | Dokumen tampil di `orders` dan di Daftar Pesanan | Sesuai: pesanan SD Islam Al Madina tersimpan di `orders` dan tampil paling atas |
+| 2 | Tolak pesanan ganda | Catat ulang pelanggan, menu, dan tanggal kirim yang sama | Muncul pesan sudah tercatat; dokumen tidak bertambah | Sesuai: "Pesanan Mama Aisya untuk Nasi Ayam Bali pada tanggal itu sudah tercatat." |
+| 3 | Bertahan saat refresh | Muat ulang halaman Chrome | Sapaan nama dan daftar pesanan tetap tampil | Sesuai |
+| 4 | Isolasi antar akun | Keluar lalu masuk dengan akun kedua | Pesanan akun pertama tidak muncul | Sesuai: akun admin@kelolakatering.id menampilkan "Belum ada pesanan" |
+| 5 | Security Rules | Rules Playground: `get orders/{id}` tanpa login | Akses ditolak | Sesuai: "Simulated read denied" |
 
 ## Repository
 
